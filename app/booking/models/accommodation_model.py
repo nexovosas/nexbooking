@@ -1,22 +1,43 @@
-from sqlalchemy import Column, Integer, String, Text, ForeignKey, Boolean
-from sqlalchemy.orm import relationship
+# app/booking/models/accommodation.py
+from datetime import datetime
+from sqlalchemy import String, Text, Boolean, Integer, ForeignKey, UniqueConstraint, Index, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
+
 
 class Accommodation(Base):  # Hospedaje
     __tablename__ = "accommodations"
 
-    id = Column(Integer, primary_key=True)  # ID único del hospedaje
-    name = Column(String, nullable=False)  # Nombre del hospedaje
-    location = Column(String, nullable=False)  # Ubicación del hospedaje (ciudad, zona, etc.)
-    description = Column(Text)  # Descripción general del hospedaje
-    services = Column(String, nullable=True)  # Servicios ofrecidos, por ejemplo: "wifi, tv, cocina"
-    host_id = Column(Integer, ForeignKey("user.id"), nullable=False)  # ID del usuario que ofrece el hospedaje
-    pet_friendly = Column(Boolean, default=False)  # Indica si se permiten mascotas
-    type = Column(String, nullable=False,default="-")  # Tipo de hospedaje (hotel, cabaña, hostal, etc.)
-    is_active = Column(Boolean, default=True, nullable=False)  #  Activado/desactivado (por defecto activado)
-    # Agrega al final del modelo Accommodation:
-    images = relationship("Image", back_populates="accommodation", cascade="all, delete")
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    host = relationship("User", backref="accommodations")  # Relación con el anfitrión (usuario propietario)
-    rooms = relationship("Room", back_populates="accommodation")  # Relación con las habitaciones asociadas al hospedaje
+    # Campos principales
+    name: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
+    location: Mapped[str] = mapped_column(String(120), nullable=False, index=True)  # ciudad / zona
+    description: Mapped[str | None] = mapped_column(Text())
+    services: Mapped[str | None] = mapped_column(String(255))  # "wifi, tv, cocina" (Nota: considerar JSON en el futuro)
 
+    # Relaciones externas
+    # OJO: si tu tabla real es "users" en lugar de "user", cambia a ForeignKey("users.id")
+    host_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    # Metadatos
+    pet_friendly: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    type: Mapped[str] = mapped_column(String(50), nullable=False, server_default="-")  # hotel, cabaña, hostal, etc.
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
+
+    # Relaciones ORM
+    host = relationship("User", backref="accommodations")  # dueños/anfitriones
+    rooms = relationship("Room", back_populates="accommodation", cascade="all, delete-orphan")
+    images = relationship("Image", back_populates="accommodation", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        # Evita duplicados del mismo nombre/ubicación por anfitrión
+        UniqueConstraint("host_id", "name", "location", name="uq_accommodations_host_name_location"),
+        # Búsquedas comunes
+        Index("ix_accommodations_location_name", "location", "name"),
+    )

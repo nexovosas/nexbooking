@@ -1,38 +1,55 @@
-from pydantic import BaseModel
+# app/booking/schemas/accommodation_schema.py
+from __future__ import annotations
+
 from typing import Optional, List
+from pydantic import BaseModel, Field, HttpUrl, ConfigDict
+from typing_extensions import Annotated
+
 from .room_schema import RoomOut
 from .image_schema import ImageOut
 
 
+# ---------- Image ----------
 class ImageCreate(BaseModel):
-    url: str
-    alt_text: Optional[str] = None
+    url: Annotated[
+        HttpUrl,
+        Field(description="URL of the image", examples=["https://example.com/image.jpg"])
+    ]
+    alt_text: Annotated[
+        Optional[str],
+        Field(None, max_length=255, description="Alternative text for the image")
+    ]
 
+
+# ---------- Accommodation Create ----------
 class AccommodationCreate(BaseModel):
-    name: str
-    location: str
-    description: Optional[str] = None
-    services: Optional[str] = None
-    pet_friendly: Optional[bool] = False
-    type: str
-    host_id: int
-    is_active: Optional[bool] = True
-    images: Optional[List[ImageCreate]] = None  # 👈 Agregado
+    name: Annotated[str, Field(min_length=2, max_length=150)]
+    location: Annotated[str, Field(min_length=2, max_length=150)]
+    description: Annotated[Optional[str], Field(None, max_length=500)]
+    services: Annotated[Optional[str], Field(None, max_length=300)]
+    pet_friendly: Annotated[bool, Field(default=False)]
+    type: Annotated[str, Field(min_length=2, max_length=50)]
+    host_id: Annotated[int, Field(gt=0)]
+    is_active: Annotated[bool, Field(default=True)]
+    images: Annotated[
+        Optional[List[ImageCreate]],
+        Field(default=None, description="List of images for the accommodation")
+    ]
 
 
-# Schema para actualizar parcialmente un hospedaje
+# ---------- Accommodation Update ----------
 class AccommodationUpdate(BaseModel):
-    name: Optional[str] = None
-    location: Optional[str] = None
-    description: Optional[str] = None
-    services: Optional[str] = None
+    name: Annotated[Optional[str], Field(None, min_length=2, max_length=150)]
+    location: Annotated[Optional[str], Field(None, min_length=2, max_length=150)]
+    description: Annotated[Optional[str], Field(None, max_length=500)]
+    services: Annotated[Optional[str], Field(None, max_length=300)]
     pet_friendly: Optional[bool] = None
-    type: Optional[str] = None
-    host_id: Optional[int] = None
+    type: Annotated[Optional[str], Field(None, min_length=2, max_length=50)]
+    host_id: Annotated[Optional[int], Field(None, gt=0)]
     is_active: Optional[bool] = None
 
 
-# Schema para devolver un hospedaje como respuesta
+# ---------- Accommodation Out ----------
 class AccommodationOut(BaseModel):
     id: int
     name: str
@@ -43,8 +60,7 @@ class AccommodationOut(BaseModel):
     type: str
     host_id: int
     is_active: bool
-    rooms: List[RoomOut] = []              # ✅ Relación con habitaciones
-    images: List[ImageOut] = []            # ✅ Relación con imágenes
+    rooms: List[RoomOut] = []
+    images: List[ImageOut] = []
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)

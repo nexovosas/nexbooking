@@ -1,3 +1,0 @@
-DATABASE_URL=postgresql://postgres:c3qxmc7n4kojjila@31.97.12.66:5432/nexovo
-JWT_SECRET=supersecretkey
-JWT_ALGORITHM=HS256

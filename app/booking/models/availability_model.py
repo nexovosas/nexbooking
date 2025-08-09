@@ -1,20 +1,33 @@
-# app/booking/models/availability_model.py
-
-from sqlalchemy import Column, Integer, Date, Float, ForeignKey
-from sqlalchemy.orm import relationship
+# app/booking/models/availability.py
+from datetime import date
+from sqlalchemy import Integer, Date, Float, ForeignKey, UniqueConstraint, CheckConstraint, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
-#Disponibilidad 
-class Availability(Base): 
+
+
+class Availability(Base):
     __tablename__ = "availabilities"
 
-    id = Column(Integer, primary_key=True, index=True)
-    
-    # Fecha en la que la habitación está disponible
-    date = Column(Date, nullable=False)
-    
-    # Precio por esa fecha específica
-    price = Column(Float, nullable=False)
-    
-    # Relación con la habitación correspondiente
-    room_id = Column(Integer, ForeignKey("rooms.id"), nullable=False)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    date: Mapped[date] = mapped_column(Date, nullable=False, index=True, doc="Fecha específica de disponibilidad")
+    price: Mapped[float] = mapped_column(Float, nullable=False, doc="Precio para esa fecha")
+
+    room_id: Mapped[int] = mapped_column(
+        ForeignKey("rooms.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+        doc="ID de la habitación correspondiente"
+    )
+
+    # Relaciones
     room = relationship("Room", back_populates="availabilities")
+
+    __table_args__ = (
+        # Evita dos registros para la misma habitación y fecha
+        UniqueConstraint("room_id", "date", name="uq_availability_room_date"),
+        # Precio positivo
+        CheckConstraint("price > 0", name="ck_availability_price_positive"),
+        # Índice compuesto para búsqueda por habitación + fecha
+        Index("ix_availability_room_date", "room_id", "date"),
+    )

@@ -1,8 +1,13 @@
+# app/booking/models/user.py
 from sqlalchemy import Column, Integer, String, Boolean, Date, DateTime
 from app.db.base import Base
 
 class User(Base):
-    __tablename__ = "user"  # importante: sin "s", y con comillas si fuera necesario
+    __tablename__ = "user"  # confirma que sea exactamente este nombre; si es "auth_user", cámbialo
+
+    __table_args__ = {
+        "extend_existing": True,  # importante si la tabla ya existe
+    }
 
     id = Column(Integer, primary_key=True, index=True)
     password = Column(String(128), nullable=False)

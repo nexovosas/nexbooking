@@ -1,34 +1,66 @@
-from sqlalchemy import Column, Integer, Date, ForeignKey,Enum,Float
-from sqlalchemy.orm import relationship
+# app/booking/models/booking.py
+from datetime import date, datetime
+from sqlalchemy import (
+    Integer, Date, Enum, Float, String,
+    ForeignKey, UniqueConstraint, CheckConstraint, Index, func
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 import enum
-from sqlalchemy import String, UniqueConstraint
 
-# Definimos un Enum de Python para los posibles estados de la reserva
+
 class BookingStatus(enum.Enum):
     pending = "pending"
     confirmed = "confirmed"
     cancelled = "cancelled"
     completed = "completed"
 
-# Modelo que representa una reserva realizada por un usuario
-class Booking(Base):  # Reserva
-    __tablename__ = "bookings"  # Nombre de la tabla en la base de datos
 
-    id = Column(Integer, primary_key=True)  # ID único de la reserva
-    
-    user_id = Column(Integer, ForeignKey("user.id"), nullable=False)# ID del usuario que realizó la reserva (relación con tabla users)
+class Booking(Base):
+    __tablename__ = "bookings"
 
-    room_id = Column(Integer, ForeignKey("rooms.id"), nullable=False)# ID de la habitación reservada (relación con tabla rooms)
-    
-    start_date = Column(Date, nullable=False)# Fecha de inicio de la reserva
-    
-    end_date = Column(Date, nullable=False)# Fecha de fin de la reserva
-    
-    guests = Column(Integer)# Número de huéspedes (personas que se hospedarán)
-    
-    status = Column(Enum(BookingStatus), nullable=False, default=BookingStatus.pending)# Estado de la reserva
-    code = Column(String(20), unique=True, nullable=False)  # Código único
-    total_price = Column(Float, nullable=False)  # 💰 Total a pagar por la reserva
-    user = relationship("User")# Relación con el modelo User para acceder a los datos del usuario
-    room = relationship("Room")# Relación con el modelo Room para acceder a los datos de la habitación
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="RESTRICT"),  # Cambia a "users.id" si tu tabla se llama así
+        nullable=False,
+        index=True
+    )
+
+    room_id: Mapped[int] = mapped_column(
+        ForeignKey("rooms.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True
+    )
+
+    start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+
+    guests: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[BookingStatus] = mapped_column(
+        Enum(BookingStatus),
+        nullable=False,
+        server_default=BookingStatus.pending.value
+    )
+
+    code: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
+    total_price: Mapped[float] = mapped_column(Float, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
+
+    # Relaciones
+    user = relationship("User", backref="bookings")
+    room = relationship("Room", backref="bookings")
+
+    __table_args__ = (
+        # Asegurar que la fecha de fin sea posterior a la de inicio
+        CheckConstraint("end_date > start_date", name="ck_booking_dates_valid"),
+        # Cantidad de huéspedes positiva
+        CheckConstraint("guests > 0", name="ck_booking_guests_positive"),
+        # Precio positivo
+        CheckConstraint("total_price > 0", name="ck_booking_price_positive"),
+        # Evitar solapamiento exacto del mismo código (el code ya es unique, esto refuerza)
+        UniqueConstraint("code", name="uq_booking_code"),
+        # Índice para búsquedas rápidas por rango de fechas y habitación
+        Index("ix_booking_room_dates", "room_id", "start_date", "end_date"),
+    )

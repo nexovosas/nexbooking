@@ -1,14 +1,28 @@
 fastapi==0.111.0
 uvicorn[standard]==0.30.1
-sqlalchemy==2.0.30
-psycopg2-binary==2.9.9
+
+# DB core
+SQLAlchemy>=2.0,<3.0
+alembic>=1.13,<2.0
+
+# Driver Postgres (psycopg v3)
+psycopg[binary]>=3.1
+
+# Validación / settings
 pydantic==2.7.1
 pydantic-settings==2.2.1
 python-dotenv==1.0.1
-alembic==1.13.1
-sqlmodel==0.0.16
-bcrypt>=4.0.1
-passlib[bcrypt]
+
+# Auth
 PyJWT==2.8.0
+passlib[bcrypt]==1.7.4
+bcrypt>=4.0.1
+
+# Email
 aiosmtplib==4.0.1
+
+# Server
 gunicorn==21.2.0
+
+# (Opcional) si realmente lo usas:
+# sqlmodel==0.0.16
