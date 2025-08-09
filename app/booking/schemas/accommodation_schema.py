@@ -1,6 +1,5 @@
 # app/booking/schemas/accommodation_schema.py
 from __future__ import annotations
-
 from typing import Optional, List
 from pydantic import BaseModel, Field, HttpUrl, ConfigDict
 from typing_extensions import Annotated
@@ -8,29 +7,60 @@ from typing_extensions import Annotated
 from .room_schema import RoomOut
 from .image_schema import ImageOut
 
-
 # ---------- Image ----------
 class ImageCreate(BaseModel):
     url: Annotated[
         HttpUrl,
-        Field(description="URL of the image", examples=["https://example.com/image.jpg"])
+        Field(
+            description="URL of the image",
+            examples=["https://cdn.nexovo.com/images/la-montera-front.jpg"]
+        )
     ]
     alt_text: Annotated[
         Optional[str],
-        Field(None, max_length=255, description="Alternative text for the image")
+        Field(
+            None,
+            max_length=255,
+            description="Alternative text for the image",
+            examples=["Front view of the hotel"]
+        )
     ]
 
 
 # ---------- Accommodation Create ----------
 class AccommodationCreate(BaseModel):
-    name: Annotated[str, Field(min_length=2, max_length=150)]
-    location: Annotated[str, Field(min_length=2, max_length=150)]
-    description: Annotated[Optional[str], Field(None, max_length=500)]
-    services: Annotated[Optional[str], Field(None, max_length=300)]
-    pet_friendly: Annotated[bool, Field(default=False)]
-    type: Annotated[str, Field(min_length=2, max_length=50)]
-    host_id: Annotated[int, Field(gt=0)]
-    is_active: Annotated[bool, Field(default=True)]
+    model_config = ConfigDict(json_schema_extra={
+        "examples": [
+            {
+                "name": "La Montera Hotel",
+                "location": "San Vicente Ferrer, Antioquia",
+                "description": "5-star hilltop hotel with 360° views, glamping area, spa, and helipad.",
+                "services": "glamping,spa,helicopter-pad,paragliding",
+                "pet_friendly": True,
+                "type": "Hotel",
+                "host_id": 1,
+                "is_active": True,
+                "images": [
+                    {
+                        "url": "https://cdn.nexovo.com/images/la-montera-front.jpg",
+                        "alt_text": "Front view of La Montera Hotel"
+                    },
+                    {
+                        "url": "https://cdn.nexovo.com/images/la-montera-room.jpg",
+                        "alt_text": "Luxury room interior"
+                    }
+                ]
+            }
+        ]
+    })
+    name: Annotated[str, Field(min_length=2, max_length=150, examples=["La Montera Hotel"])]
+    location: Annotated[str, Field(min_length=2, max_length=150, examples=["San Vicente Ferrer, Antioquia"])]
+    description: Annotated[Optional[str], Field(None, max_length=500, examples=["5-star hilltop hotel with 360° views."])]
+    services: Annotated[Optional[str], Field(None, max_length=300, examples=["glamping,spa,helicopter-pad"])]
+    pet_friendly: Annotated[bool, Field(default=False, examples=[True])]
+    type: Annotated[str, Field(min_length=2, max_length=50, examples=["Hotel"])]
+    host_id: Annotated[int, Field(gt=0, examples=[1])]
+    is_active: Annotated[bool, Field(default=True, examples=[True])]
     images: Annotated[
         Optional[List[ImageCreate]],
         Field(default=None, description="List of images for the accommodation")
@@ -39,6 +69,16 @@ class AccommodationCreate(BaseModel):
 
 # ---------- Accommodation Update ----------
 class AccommodationUpdate(BaseModel):
+    model_config = ConfigDict(json_schema_extra={
+        "examples": [
+            {
+                "name": "La Montera Glamping",
+                "description": "Updated description for the glamping site",
+                "services": "glamping,spa",
+                "is_active": False
+            }
+        ]
+    })
     name: Annotated[Optional[str], Field(None, min_length=2, max_length=150)]
     location: Annotated[Optional[str], Field(None, min_length=2, max_length=150)]
     description: Annotated[Optional[str], Field(None, max_length=500)]
@@ -63,4 +103,28 @@ class AccommodationOut(BaseModel):
     rooms: List[RoomOut] = []
     images: List[ImageOut] = []
 
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "id": 1,
+                    "name": "La Montera Hotel",
+                    "location": "San Vicente Ferrer, Antioquia",
+                    "description": "5-star hilltop hotel with 360° views, glamping, spa, and helipad.",
+                    "services": "glamping,spa,helicopter-pad,paragliding",
+                    "pet_friendly": True,
+                    "type": "Hotel",
+                    "host_id": 1,
+                    "is_active": True,
+                    "rooms": [],
+                    "images": [
+                        {
+                            "url": "https://cdn.nexovo.com/images/la-montera-front.jpg",
+                            "alt_text": "Front view of La Montera Hotel"
+                        }
+                    ]
+                }
+            ]
+        }
+    )
