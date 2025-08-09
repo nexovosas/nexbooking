@@ -123,7 +123,13 @@ def health():
     return {"status": "healthy"}
 
 # Routers
-app.include_router(booking_router, prefix=f"{API_PREFIX}/booking", tags=["Booking"])
-app.include_router(accommodation_router, prefix=f"{API_PREFIX}/accommodations", tags=["Accommodations"])
-app.include_router(rooms_router, prefix=f"{API_PREFIX}/rooms", tags=["Rooms"])
-app.include_router(availability_router, prefix=f"{API_PREFIX}/availability", tags=["Availability"])
+# app.include_router(booking_router, prefix=f"{API_PREFIX}/booking", tags=["Booking"])
+# app.include_router(accommodation_router, prefix=f"{API_PREFIX}/accommodations", tags=["Accommodations"])
+# app.include_router(rooms_router, prefix=f"{API_PREFIX}/rooms", tags=["Rooms"])
+# app.include_router(availability_router, prefix=f"{API_PREFIX}/availability", tags=["Availability"])
+
+# Opción A: cada router define su propio prefix interno
+app.include_router(booking_router,       prefix=API_PREFIX, tags=["Bookings"])
+app.include_router(accommodation_router, prefix=API_PREFIX, tags=["Accommodations"])
+app.include_router(rooms_router,         prefix=API_PREFIX, tags=["Rooms"])
+app.include_router(availability_router,  prefix=API_PREFIX, tags=["Availability"])

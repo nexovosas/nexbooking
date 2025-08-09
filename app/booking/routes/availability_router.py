@@ -22,7 +22,7 @@ from app.booking.services.availability_service import (
 )
 from app.db.session import get_db
 
-router = APIRouter(tags=["Availabilities"], prefix="/availabilities")
+router = APIRouter(tags=["Availability"], prefix="/availability")
 
 
 @router.post(
