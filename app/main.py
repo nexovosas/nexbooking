@@ -84,7 +84,7 @@ def custom_openapi():
     openapi_schema["servers"] = [
         {"url": "https://api.nexovo.com.co", "description": "Production"},
         {"url": "http://127.0.0.1:5000", "description": "Local"},
-        {"url": API_PREFIX, "description": "Mounted base path"},
+        {"url": "/", "description": "Mounted base path"},
     ]
 
     # Seguridad global: Bearer JWT
