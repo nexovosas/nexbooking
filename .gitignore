@@ -1,0 +1,18 @@
+cat > .gitignore << 'EOF'
+# Entornos y caches
+venv/
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+
+# OS y editor
+.DS_Store
+.idea/
+.vscode/
+
+# Alembic cache (mantener versiones)
+alembic/versions/__pycache__/
+EOF
