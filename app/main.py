@@ -45,7 +45,7 @@ app = FastAPI(
         "pricing, and host-owned resources."
     ),
     docs_url=f"{API_PREFIX}/docs",
-    redoc_url=f"{API_PREFIX}/redoc",          # añadido
+    redoc_url=f"{API_PREFIX}/redoc",
     openapi_url=f"{API_PREFIX}/openapi.json",
     middleware=middleware,
     contact={

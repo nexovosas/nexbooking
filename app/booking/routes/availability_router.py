@@ -21,6 +21,7 @@ from app.booking.services.availability_service import (
     delete_availability,
 )
 from app.db.session import get_db
+from app.common.schemas import ErrorResponse  # ⬅️ nuevo
 
 router = APIRouter(tags=["Availability"], prefix="/availability")
 
@@ -30,7 +31,15 @@ router = APIRouter(tags=["Availability"], prefix="/availability")
     response_model=AvailabilityOut,
     status_code=status.HTTP_201_CREATED,
     summary="Crear disponibilidad",
-    description="Crea una nueva disponibilidad para una habitación específica."
+    description="Crea una nueva disponibilidad para una habitación específica.",
+    responses={
+        201: {"description": "Creado"},
+        400: {"model": ErrorResponse, "description": "Regla de negocio o datos inválidos"},
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse, "description": "Habitación/Alojamiento no encontrado"},
+        422: {"description": "Error de validación"},
+    },
+    operation_id="createAvailability",
 )
 def create_availability_route(
     availability: AvailabilityCreate,
@@ -44,7 +53,13 @@ def create_availability_route(
     "/room/{room_id}",
     response_model=List[AvailabilityOut],
     summary="Listar disponibilidades por habitación",
-    description="Devuelve todas las disponibilidades asociadas a una habitación."
+    description="Devuelve todas las disponibilidades asociadas a una habitación.",
+    responses={
+        200: {"description": "OK"},
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse, "description": "Habitación no encontrada"},
+    },
+    operation_id="listAvailabilityByRoom",
 )
 def get_availabilities_by_room_route(
     room_id: int = Path(..., ge=1, description="ID de la habitación"),
@@ -57,7 +72,13 @@ def get_availabilities_by_room_route(
     "/{availability_id}",
     response_model=AvailabilityOut,
     summary="Obtener disponibilidad por ID",
-    description="Devuelve los datos de una disponibilidad específica."
+    description="Devuelve los datos de una disponibilidad específica.",
+    responses={
+        200: {"description": "OK"},
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse, "description": "Disponibilidad no encontrada"},
+    },
+    operation_id="getAvailabilityById",
 )
 def get_availability_by_id_route(
     availability_id: int = Path(..., ge=1, description="ID de la disponibilidad"),
@@ -73,7 +94,15 @@ def get_availability_by_id_route(
     "/{availability_id}",
     response_model=AvailabilityOut,
     summary="Actualizar disponibilidad",
-    description="Actualiza los datos de una disponibilidad existente."
+    description="Actualiza los datos de una disponibilidad existente.",
+    responses={
+        200: {"description": "Actualizado"},
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse, "description": "Prohibido (no propietario)"},
+        404: {"model": ErrorResponse, "description": "Disponibilidad no encontrada"},
+        422: {"description": "Error de validación"},
+    },
+    operation_id="updateAvailability",
 )
 def update_availability_route(
     availability_id: int = Path(..., ge=1, description="ID de la disponibilidad"),
@@ -93,6 +122,13 @@ def update_availability_route(
     summary="Eliminar disponibilidad",
     description="Elimina una disponibilidad de la base de datos.",
     response_model=None,
+    responses={
+        204: {"description": "Eliminado. Sin contenido."},
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse, "description": "Prohibido (no propietario)"},
+        404: {"model": ErrorResponse, "description": "Disponibilidad no encontrada"},
+    },
+    operation_id="deleteAvailability",
 )
 def delete_availability_route(
     availability_id: int = Path(..., ge=1, description="ID de la disponibilidad"),
