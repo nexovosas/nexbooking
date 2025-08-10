@@ -2,12 +2,13 @@ from fastapi import FastAPI
 from starlette.middleware import Middleware
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
+
 from app.core.config import settings
 from app.core.errors import setup_exception_handlers
-from app.booking.uploads.routes import router as uploads_router
-
-from fastapi.openapi.utils import get_openapi
 from app.middleware.auth_middleware import AuthMiddleware
+
+from app.booking.uploads.routes import router as uploads_router
 from app.booking.routes import (
     booking_router,
     accommodation_router,
@@ -17,12 +18,25 @@ from app.booking.routes import (
 
 API_PREFIX = "/api/v1"
 
+# -----------------------------------------------------------------------------
+# Middleware
+# -----------------------------------------------------------------------------
 middleware = [
     Middleware(
         CORSMiddleware,
-        allow_origins=["https://nexovo.com.co", "https://api.nexovo.com.co", "https://booking.nexovo.com.co", "https://s3.nexovo.com.co", "http://localhost:5000"],
-        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["*"],
+        # Orígenes útiles en desarrollo local
+        allow_origins=[
+            "http://localhost",
+            "http://127.0.0.1",
+            "http://localhost:3000",
+            "http://localhost:5000",
+            "http://localhost:5173",
+        ],
+        # Permite https://nexovo.com.co y cualquier subdominio anidado
+        allow_origin_regex=r"^https:\/\/(?:[a-z0-9-]+\.)*nexovo\.com\.co$",
+        allow_credentials=True,
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+        allow_headers=["Authorization", "Content-Type", "*"],
         expose_headers=["*"],
     ),
     Middleware(GZipMiddleware),
@@ -32,11 +46,15 @@ middleware = [
             "/",
             f"{API_PREFIX}/health",
             f"{API_PREFIX}/docs",
+            f"{API_PREFIX}/redoc",
             f"{API_PREFIX}/openapi.json",
         },
     ),
 ]
 
+# -----------------------------------------------------------------------------
+# App
+# -----------------------------------------------------------------------------
 app = FastAPI(
     title="Nexovo Booking API",
     version="0.1.0",
@@ -58,11 +76,14 @@ app = FastAPI(
         "name": "Proprietary License",
         "url": "https://nexovo.com.co/license",
     },
-    servers=[
-        {"url": API_PREFIX, "description": "Current base path"},
-    ],
+    # Importante: NO pongas /api/v1 aquí para evitar duplicar en Swagger
+    servers=[{"url": "/", "description": "Mounted base path"}],
+    redirect_slashes=True,
 )
 
+# -----------------------------------------------------------------------------
+# OpenAPI con branding y servers correctos
+# -----------------------------------------------------------------------------
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -74,14 +95,14 @@ def custom_openapi():
         routes=app.routes,
     )
 
-    # Branding (aparece en Redoc)
+    # Branding (Redoc)
     openapi_schema["info"]["x-logo"] = {
         "url": "https://nexovo.com.co/light_logo.png",
         "altText": "Nexovo",
         "backgroundColor": "#0A122A",
     }
 
-    # Servers visibles en Swagger/Redoc (además del que pusiste en FastAPI)
+    # Servers visibles en Swagger/Redoc SIN /api/v1 (lo añade el prefix del router)
     openapi_schema["servers"] = [
         {"url": "https://api.nexovo.com.co", "description": "Production"},
         {"url": "http://127.0.0.1:5000", "description": "Local"},
@@ -100,11 +121,13 @@ def custom_openapi():
     })
     openapi_schema["security"] = [{"BearerAuth": []}]
 
-    # Descripciones de tags (opcional, si usas estos tags)
+    # Descripciones de tags
     openapi_schema["tags"] = [
         {"name": "Accommodations", "description": "Create, search, update, and delete accommodations."},
         {"name": "Rooms", "description": "Room inventory and pricing."},
         {"name": "Availability", "description": "Calendar availability management."},
+        {"name": "Bookings", "description": "Booking operations and flows."},
+        {"name": "Uploads", "description": "File uploads for booking module."},
     ]
 
     app.openapi_schema = openapi_schema
@@ -112,9 +135,9 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-
-setup_exception_handlers(app)
-
+# -----------------------------------------------------------------------------
+# Health & Root
+# -----------------------------------------------------------------------------
 @app.get("/")
 def root():
     return {"ok": True, "service": "booking"}
@@ -123,15 +146,16 @@ def root():
 def health():
     return {"status": "healthy"}
 
-# Routers
-# app.include_router(booking_router, prefix=f"{API_PREFIX}/booking", tags=["Booking"])
-# app.include_router(accommodation_router, prefix=f"{API_PREFIX}/accommodations", tags=["Accommodations"])
-# app.include_router(rooms_router, prefix=f"{API_PREFIX}/rooms", tags=["Rooms"])
-# app.include_router(availability_router, prefix=f"{API_PREFIX}/availability", tags=["Availability"])
-
-# Opción A: cada router define su propio prefix interno
+# -----------------------------------------------------------------------------
+# Routers (cada router define paths SIN /api/v1 internamente)
+# -----------------------------------------------------------------------------
 app.include_router(booking_router,       prefix=API_PREFIX, tags=["Bookings"])
 app.include_router(accommodation_router, prefix=API_PREFIX, tags=["Accommodations"])
 app.include_router(rooms_router,         prefix=API_PREFIX, tags=["Rooms"])
 app.include_router(availability_router,  prefix=API_PREFIX, tags=["Availability"])
 app.include_router(uploads_router,       prefix=API_PREFIX, tags=["Uploads"])
+
+# -----------------------------------------------------------------------------
+# Global exception handlers
+# -----------------------------------------------------------------------------
+setup_exception_handlers(app)
