@@ -10,7 +10,7 @@ class Availability(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
-    date: Mapped[date] = mapped_column(Date, nullable=False, index=True, doc="Fecha específica de disponibilidad")
+    date: Mapped[Date] = mapped_column(Date, nullable=False, index=True, doc="Fecha específica de disponibilidad")
     price: Mapped[float] = mapped_column(Float, nullable=False, doc="Precio para esa fecha")
 
     room_id: Mapped[int] = mapped_column(

@@ -26,7 +26,6 @@ from app.booking.services.accommodation_service import (
 
 router = APIRouter(tags=["Accommodations"], prefix="/accommodations")
 
-
 @router.post(
     "/",
     response_model=AccommodationOut,
@@ -45,10 +44,10 @@ router = APIRouter(tags=["Accommodations"], prefix="/accommodations")
 def create_accommodation_endpoint(
     accommodation_data: AccommodationCreate,
     db: Session = Depends(get_db),
-    _: dict = Depends(verify_token)
+    user_data: dict = Depends(verify_token)
 ):
-    return create_accommodation(db=db, accommodation_data=accommodation_data)
-
+    # host_id SIEMPRE del JWT (Django)
+    return create_accommodation(db=db, accommodation_data=accommodation_data, host_id=user_data["id"])
 
 @router.get(
     "/",
@@ -63,7 +62,6 @@ def create_accommodation_endpoint(
 )
 def read_all_accommodations(db: Session = Depends(get_db)):
     return get_all_accommodations(db)
-
 
 @router.put(
     "/{accommodation_id}",
@@ -83,13 +81,13 @@ def update_accommodation_endpoint(
     accommodation_id: int = Path(..., gt=0, description="Accommodation ID"),
     hospedaje: AccommodationUpdate = ...,
     db: Session = Depends(get_db),
-    _: dict = Depends(verify_token)
+    user_data: dict = Depends(verify_token)
 ):
+    acc = get_accommodation(db, accommodation_id)  # lanza 404 si no existe
+    if acc.host_id != user_data["id"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     updated = update_accommodation(db, accommodation_id, hospedaje)
-    if not updated:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Accommodation not found")
     return updated
-
 
 @router.delete(
     "/{accommodation_id}",
@@ -108,13 +106,13 @@ def update_accommodation_endpoint(
 def delete_accommodation_endpoint(
     accommodation_id: int = Path(..., gt=0, description="Accommodation ID"),
     db: Session = Depends(get_db),
-    _: dict = Depends(verify_token)
+    user_data: dict = Depends(verify_token)
 ) -> None:
-    success = delete_accommodation(db, accommodation_id)
-    if not success:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Accommodation not found")
+    acc = get_accommodation(db, accommodation_id)  # 404 si no existe
+    if acc.host_id != user_data["id"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    delete_accommodation(db, accommodation_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
 
 @router.get(
     "/my",
@@ -132,7 +130,6 @@ def get_my_accommodations(
     user_data: dict = Depends(verify_token)
 ):
     return get_accommodations_by_host(db, user_data.get("id"))
-
 
 @router.get(
     "/search",
@@ -152,7 +149,6 @@ def search_accommodations(
     db: Session = Depends(get_db)
 ):
     return search_accommodations_service(db, name, max_price, services)
-
 
 @router.get(
     "/{accommodation_id}",

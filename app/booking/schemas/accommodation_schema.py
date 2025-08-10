@@ -1,4 +1,3 @@
-# app/booking/schemas/accommodation_schema.py
 from __future__ import annotations
 from typing import Optional, List
 from pydantic import BaseModel, Field, HttpUrl, ConfigDict
@@ -38,7 +37,6 @@ class AccommodationCreate(BaseModel):
                 "services": "glamping,spa,helicopter-pad,paragliding",
                 "pet_friendly": True,
                 "type": "Hotel",
-                "host_id": 1,
                 "is_active": True,
                 "images": [
                     {
@@ -59,7 +57,6 @@ class AccommodationCreate(BaseModel):
     services: Annotated[Optional[str], Field(None, max_length=300, examples=["glamping,spa,helicopter-pad"])]
     pet_friendly: Annotated[bool, Field(default=False, examples=[True])]
     type: Annotated[str, Field(min_length=2, max_length=50, examples=["Hotel"])]
-    host_id: Annotated[int, Field(gt=0, examples=[1])]
     is_active: Annotated[bool, Field(default=True, examples=[True])]
     images: Annotated[
         Optional[List[ImageCreate]],
@@ -85,7 +82,6 @@ class AccommodationUpdate(BaseModel):
     services: Annotated[Optional[str], Field(None, max_length=300)]
     pet_friendly: Optional[bool] = None
     type: Annotated[Optional[str], Field(None, min_length=2, max_length=50)]
-    host_id: Annotated[Optional[int], Field(None, gt=0)]
     is_active: Optional[bool] = None
 
 
