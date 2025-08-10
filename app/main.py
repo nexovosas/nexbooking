@@ -104,7 +104,7 @@ def custom_openapi():
 
     # Servers visibles en Swagger/Redoc SIN /api/v1 (lo añade el prefix del router)
     openapi_schema["servers"] = [
-        {"url": "https://api.nexovo.com.co", "description": "Production"},
+        {"url": "https://booking.nexovo.com.co", "description": "Production"},
         {"url": "http://127.0.0.1:5000", "description": "Local"},
         {"url": "/", "description": "Mounted base path"},
     ]
