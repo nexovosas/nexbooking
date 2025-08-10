@@ -4,6 +4,7 @@ from starlette.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.errors import setup_exception_handlers
+from app.booking.uploads.routes import router as uploads_router
 
 from fastapi.openapi.utils import get_openapi
 from app.middleware.auth_middleware import AuthMiddleware
@@ -19,7 +20,7 @@ API_PREFIX = "/api/v1"
 middleware = [
     Middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # TODO: Cambiar en producción por dominios permitidos
+        allow_origins=["https://nexovo.com.co", "https://s3.nexovo.com.co", "http://localhost:5000"],
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["*"],
@@ -133,3 +134,4 @@ app.include_router(booking_router,       prefix=API_PREFIX, tags=["Bookings"])
 app.include_router(accommodation_router, prefix=API_PREFIX, tags=["Accommodations"])
 app.include_router(rooms_router,         prefix=API_PREFIX, tags=["Rooms"])
 app.include_router(availability_router,  prefix=API_PREFIX, tags=["Availability"])
+app.include_router(uploads_router,       prefix=API_PREFIX, tags=["Uploads"])
