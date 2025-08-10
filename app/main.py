@@ -20,7 +20,7 @@ API_PREFIX = "/api/v1"
 middleware = [
     Middleware(
         CORSMiddleware,
-        allow_origins=["https://nexovo.com.co", "https://s3.nexovo.com.co", "http://localhost:5000"],
+        allow_origins=["https://nexovo.com.co", "https://api.nexovo.com.co", "https://s3.nexovo.com.co", "http://localhost:5000"],
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["*"],
