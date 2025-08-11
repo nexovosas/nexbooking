@@ -6,7 +6,9 @@ from typing_extensions import Annotated
 
 # ---------- Create ----------
 class ImageCreate(BaseModel):
-    model_config = ConfigDict(json_schema_extra={
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_schema_extra={
         "examples": [
             {
                 "url": "https://cdn.nexovo.com/images/la-montera-front.jpg",
@@ -28,7 +30,7 @@ class ImageCreate(BaseModel):
     alt_text: Annotated[
         Optional[str],
         Field(
-            None,
+            default=None,
             max_length=255,
             description="Alternative text for accessibility",
             examples=["Front view of La Montera Hotel"]
