@@ -6,8 +6,7 @@ from fastapi.openapi.utils import get_openapi
 
 from app.core.config import settings
 from app.core.errors import setup_exception_handlers
-from app.middleware.auth_middleware import AuthMiddleware
-from app.auth.verify_token import verify_token 
+from app.auth.verify_token import verify_token
 from app.booking.uploads.routes import router as uploads_router
 from app.booking.routes import (
     booking_router,
@@ -18,23 +17,20 @@ from app.booking.routes import (
 
 API_PREFIX = "/api/v1"
 
-
 # -----------------------------------------------------------------------------
-# Middleware
+# Middleware (sin AuthMiddleware)
 # -----------------------------------------------------------------------------
 middleware = [
     Middleware(
         CORSMiddleware,
-        # Orígenes útiles en desarrollo local
         allow_origins=[
-            "https://nexovo.com.co", 
+            "https://nexovo.com.co",
             "http://localhost",
             "http://127.0.0.1",
             "http://localhost:3000",
             "http://localhost:5000",
             "http://localhost:5173",
         ],
-        # Permite https://nexovo.com.co y cualquier subdominio anidado
         allow_origin_regex=r"^https:\/\/(?:[a-z0-9-]+\.)*nexovo\.com\.co$",
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
@@ -42,16 +38,6 @@ middleware = [
         expose_headers=["*"],
     ),
     Middleware(GZipMiddleware),
-    Middleware(
-        AuthMiddleware,
-        exempt_paths={
-            "/",
-            f"{API_PREFIX}/health",
-            f"{API_PREFIX}/docs",
-            f"{API_PREFIX}/redoc",
-            f"{API_PREFIX}/openapi.json",
-        },
-    ),
 ]
 
 # -----------------------------------------------------------------------------
@@ -78,7 +64,6 @@ app = FastAPI(
         "name": "Proprietary License",
         "url": "https://nexovo.com.co/license",
     },
-    # Importante: NO pongas /api/v1 aquí para evitar duplicar en Swagger
     servers=[{"url": "/", "description": "Mounted base path"}],
     redirect_slashes=True,
 )
@@ -97,21 +82,18 @@ def custom_openapi():
         routes=app.routes,
     )
 
-    # Branding (Redoc)
     openapi_schema["info"]["x-logo"] = {
         "url": "https://nexovo.com.co/light_logo.png",
         "altText": "Nexovo",
         "backgroundColor": "#0A122A",
     }
 
-    # Servers visibles en Swagger/Redoc SIN /api/v1 (lo añade el prefix del router)
     openapi_schema["servers"] = [
         {"url": "https://booking.nexovo.com.co", "description": "Production"},
         {"url": "http://127.0.0.1:5000", "description": "Local"},
         {"url": "/", "description": "Mounted base path"},
     ]
 
-    # Seguridad global: Bearer JWT
     comps = openapi_schema.setdefault("components", {})
     sec = comps.setdefault("securitySchemes", {})
     sec.update({
@@ -123,7 +105,6 @@ def custom_openapi():
     })
     openapi_schema["security"] = [{"BearerAuth": []}]
 
-    # Descripciones de tags
     openapi_schema["tags"] = [
         {"name": "Accommodations", "description": "Create, search, update, and delete accommodations."},
         {"name": "Rooms", "description": "Room inventory and pricing."},
@@ -148,22 +129,19 @@ def root():
 def health():
     return {"status": "healthy"}
 
-
 @app.get(f"{API_PREFIX}/_debug/cookies", tags=["Debug"])
 def debug_cookies(req: Request):
-    # Muestra lo que FastAPI VE llegar en cookies y Authorization
     return {
         "cookies": dict(req.cookies),
         "auth_header": req.headers.get("authorization"),
     }
 
 @app.get(f"{API_PREFIX}/_debug/me", tags=["Debug"])
-def debug_me(user = Depends(verify_token)):  # usa tu dependencia que valida JWT (ahora también desde cookie)
-    # Si llega token (por cookie o Bearer) devuelve claims; si no, 401/403
+def debug_me(user = Depends(verify_token)):
     return {"claims": user}
 
 # -----------------------------------------------------------------------------
-# Routers (cada router define paths SIN /api/v1 internamente)
+# Routers
 # -----------------------------------------------------------------------------
 app.include_router(booking_router,       prefix=API_PREFIX, tags=["Bookings"])
 app.include_router(accommodation_router, prefix=API_PREFIX, tags=["Accommodations"])

@@ -7,6 +7,7 @@ class User(Base):
 
     __table_args__ = {
         "extend_existing": True,  # importante si la tabla ya existe
+        "info": {"skip_autogenerate": True},  # <-- clave para evitar autogeneración
     }
 
     id = Column(Integer, primary_key=True, index=True)
