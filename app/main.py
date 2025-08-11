@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Depends
 from starlette.middleware import Middleware
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,7 +7,7 @@ from fastapi.openapi.utils import get_openapi
 from app.core.config import settings
 from app.core.errors import setup_exception_handlers
 from app.middleware.auth_middleware import AuthMiddleware
-
+from app.auth.verify_token import verify_token 
 from app.booking.uploads.routes import router as uploads_router
 from app.booking.routes import (
     booking_router,
@@ -18,6 +18,7 @@ from app.booking.routes import (
 
 API_PREFIX = "/api/v1"
 
+
 # -----------------------------------------------------------------------------
 # Middleware
 # -----------------------------------------------------------------------------
@@ -26,6 +27,7 @@ middleware = [
         CORSMiddleware,
         # Orígenes útiles en desarrollo local
         allow_origins=[
+            "https://nexovo.com.co", 
             "http://localhost",
             "http://127.0.0.1",
             "http://localhost:3000",
@@ -145,6 +147,20 @@ def root():
 @app.get(f"{API_PREFIX}/health")
 def health():
     return {"status": "healthy"}
+
+
+@app.get(f"{API_PREFIX}/_debug/cookies", tags=["Debug"])
+def debug_cookies(req: Request):
+    # Muestra lo que FastAPI VE llegar en cookies y Authorization
+    return {
+        "cookies": dict(req.cookies),
+        "auth_header": req.headers.get("authorization"),
+    }
+
+@app.get(f"{API_PREFIX}/_debug/me", tags=["Debug"])
+def debug_me(user = Depends(verify_token)):  # usa tu dependencia que valida JWT (ahora también desde cookie)
+    # Si llega token (por cookie o Bearer) devuelve claims; si no, 401/403
+    return {"claims": user}
 
 # -----------------------------------------------------------------------------
 # Routers (cada router define paths SIN /api/v1 internamente)
