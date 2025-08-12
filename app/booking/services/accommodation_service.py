@@ -1,15 +1,15 @@
 # app/booking/services/accommodation_service.py
 from __future__ import annotations
 from typing import Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
-from fastapi import HTTPException, status
+from fastapi import Depends, HTTPException, status
 
 from app.booking.models.accommodation_model import Accommodation
 from app.booking.models.room_model import Room
 from app.booking.schemas.accommodation_schema import AccommodationCreate, AccommodationUpdate
-from app.booking.services.image_service import create_image_for_accommodation
+from app.db.session import get_db
 
 def _host_exists(db: Session, host_id: int) -> bool:
     # Chequeo directo contra la tabla "user" de Django
@@ -20,17 +20,32 @@ def search_accommodations_service(
     db: Session,
     name: Optional[str] = None,
     max_price: Optional[float] = None,
-    services: Optional[str] = None
+    services: Optional[str] = None,
 ):
-    query = db.query(Accommodation).join(Room)
+    # Normalizar entradas
+    name = (name or "").strip() or None
+    services = (services or "").strip() or None
+    # OUTER JOIN para no perder alojamientos sin rooms
+    query = (
+        db.query(Accommodation)
+        .outerjoin(Room, Room.accommodation_id == Accommodation.id)
+    )
     if max_price is not None:
         query = query.filter(Room.base_price <= max_price)
     if name:
         query = query.filter(Accommodation.name.ilike(f"%{name}%"))
     if services:
-        for s in [x.strip().lower() for x in services.split(",")]:
-            query = query.filter(Accommodation.services.ilike(f"%{s}%"))
-    return query.group_by(Accommodation.id).all()
+        # Cambia a OR si prefieres que coincida con cualquiera de los términos
+        terms = [t.strip().lower() for t in services.split(",") if t.strip()]
+        # AND (todos los términos):
+        for t in terms:
+            query = query.filter(Accommodation.services.ilike(f"%{t}%"))
+        # ---- OR (descomenta esto y comenta el bucle de arriba si prefieres OR) ----
+        # from sqlalchemy import or_
+        # ors = [Accommodation.services.ilike(f"%{t}%") for t in terms]
+        # query = query.filter(or_(*ors))
+    return query.distinct(Accommodation.id).all()
+
 
 def create_accommodation(db: Session, accommodation_data: AccommodationCreate, host_id: int):
     # 1) Verificar host
@@ -70,18 +85,30 @@ def create_accommodation(db: Session, accommodation_data: AccommodationCreate, h
 
     db.refresh(acc)
 
-    # 4) Imágenes (si aplica)
-    if images_data:
-        for img in images_data:
-            create_image_for_accommodation(db, img, acc.id)
-
     return acc
 
 def get_all_accommodations(db: Session, skip: int = 0, limit: int = 10):
-    return db.query(Accommodation).offset(skip).limit(limit).all()
+    return (
+        db.query(Accommodation)
+        .options(
+            selectinload(Accommodation.images),
+            selectinload(Accommodation.rooms),
+        )
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 def get_accommodation(db: Session, accommodation_id: int):
-    acc = db.query(Accommodation).filter(Accommodation.id == accommodation_id).first()
+    acc = (
+        db.query(Accommodation)
+        .options(
+            selectinload(Accommodation.images),
+            selectinload(Accommodation.rooms),
+        )
+        .filter(Accommodation.id == accommodation_id)
+        .first()
+    )
     if not acc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Accommodation not found")
     return acc

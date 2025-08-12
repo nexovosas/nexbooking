@@ -3,17 +3,20 @@ from starlette.middleware import Middleware
 from starlette.middleware.gzip import GZipMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from contextlib import asynccontextmanager
 
 from app.core.config import settings
 from app.core.errors import setup_exception_handlers
 from app.auth.verify_token import verify_token
-from app.booking.uploads.routes import router as uploads_router
 from app.booking.routes import (
     booking_router,
     accommodation_router,
     rooms_router,
     availability_router,
+    s3_router,
 )
+from app.core.s3_bootstrap import ensure_bucket
+
 
 API_PREFIX = "/api/v1"
 
@@ -41,6 +44,14 @@ middleware = [
 ]
 
 # -----------------------------------------------------------------------------
+# Configuration and S3 bucket setup
+# -----------------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    ensure_bucket()
+
+# -----------------------------------------------------------------------------
 # App
 # -----------------------------------------------------------------------------
 app = FastAPI(
@@ -66,6 +77,7 @@ app = FastAPI(
     },
     servers=[{"url": "/", "description": "Mounted base path"}],
     redirect_slashes=True,
+    lifespan=lifespan,
 )
 
 # -----------------------------------------------------------------------------
@@ -110,7 +122,7 @@ def custom_openapi():
         {"name": "Rooms", "description": "Room inventory and pricing."},
         {"name": "Availability", "description": "Calendar availability management."},
         {"name": "Bookings", "description": "Booking operations and flows."},
-        {"name": "Uploads", "description": "File uploads for booking module."},
+        {"name": "s3", "description": "File uploads for booking module."},
     ]
 
     app.openapi_schema = openapi_schema
@@ -147,7 +159,7 @@ app.include_router(booking_router,       prefix=API_PREFIX, tags=["Bookings"])
 app.include_router(accommodation_router, prefix=API_PREFIX, tags=["Accommodations"])
 app.include_router(rooms_router,         prefix=API_PREFIX, tags=["Rooms"])
 app.include_router(availability_router,  prefix=API_PREFIX, tags=["Availability"])
-app.include_router(uploads_router,       prefix=API_PREFIX, tags=["Uploads"])
+app.include_router(s3_router,            prefix=API_PREFIX, tags=["s3"])
 
 # -----------------------------------------------------------------------------
 # Global exception handlers

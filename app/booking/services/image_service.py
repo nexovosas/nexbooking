@@ -1,9 +1,11 @@
 # app/booking/services/image_service.py
 from __future__ import annotations
 from typing import Iterable, List, Optional, Mapping, Any
+from fastapi import UploadFile
 from sqlalchemy.orm import Session
 from app.booking.models.image_model import Image
 from app.booking.schemas.image_schema import ImageCreate
+from app.booking.services.s3_service import S3Service
 
 def _normalize_image_item(item: Any) -> dict:
     """
@@ -31,11 +33,23 @@ def _normalize_image_item(item: Any) -> dict:
 
     return d
 
-def create_image_for_accommodation(db: Session, image_data: ImageCreate, accommodation_id: int) -> Image:
-    d = _normalize_image_item(image_data)
+def create_image_for_accommodation_from_upload(
+    file: UploadFile,
+    accommodation_id: int,
+    db: Session,
+    alt_text: Optional[str] = None,
+) -> Image:
+    """
+    Sube el archivo a S3/MinIO y crea el registro Image apuntando a la KEY.
+    """
+    s3 = S3Service()
+    # carpeta: bookings/accommodations/<id>
+    folder = f"accommodations/{accommodation_id}"
+    obj = s3.upload_file(file, folder=folder)  # -> {"key": "...", "url": presigned_get, ...}
+
     db_image = Image(
-        url=d.get("url"),
-        alt_text=d.get("alt_text"),
+        url=obj["key"],           # Guardamos la KEY (seguro para objetos privados)
+        alt_text=alt_text or None,
         accommodation_id=accommodation_id,
     )
     db.add(db_image)

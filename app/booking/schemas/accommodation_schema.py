@@ -38,16 +38,7 @@ class AccommodationCreate(BaseModel):
                 "pet_friendly": True,
                 "type": "Hotel",
                 "is_active": True,
-                "images": [
-                    {
-                        "url": "https://cdn.nexovo.com/images/la-montera-front.jpg",
-                        "alt_text": "Front view of La Montera Hotel"
-                    },
-                    {
-                        "url": "https://cdn.nexovo.com/images/la-montera-room.jpg",
-                        "alt_text": "Luxury room interior"
-                    }
-                ]
+                
             }
         ]
     })
@@ -58,10 +49,7 @@ class AccommodationCreate(BaseModel):
     pet_friendly: Annotated[bool, Field(default=False, examples=[True])]
     type: Annotated[str, Field(min_length=2, max_length=50, examples=["Hotel"])]
     is_active: Annotated[bool, Field(default=True, examples=[True])]
-    images: Annotated[
-        Optional[List[ImageCreate]],
-        Field(default=None, description="List of images for the accommodation")
-    ]
+    
 
 
 # ---------- Accommodation Update ----------

@@ -29,6 +29,16 @@ class Settings(BaseSettings):
     EMAIL_PORT: int = 465
     SMTP_FROM: EmailStr | None = None
     SMTP_REPLY_TO: EmailStr | None = None
+    
+    # === Configuration S3 / MinIO ===
+    S3_ENDPOINT: str
+    S3_ACCESS_KEY: str
+    S3_SECRET_KEY: str
+    S3_REGION: str = "us-east-1"
+    S3_BUCKET: str
+    S3_PREFIX: str = ""
+    S3_USE_SSL: bool = False
+    S3_PRESIGNED_EXPIRES: int = 3600
 
     # === Derivado ===
     SQLALCHEMY_DATABASE_URI: PostgresDsn | str | None = None
