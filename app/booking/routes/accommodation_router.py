@@ -35,23 +35,25 @@ router = APIRouter(tags=["Accommodations"], prefix="/accommodations")
     status_code=status.HTTP_201_CREATED,
     summary="Create a new accommodation",
     description="Creates a new accommodation and optionally its images. Requires authentication.",
+    operation_id="createAccommodation",
     responses={
         201: {"description": "Created"},
         400: {"model": ErrorResponse, "description": "Invalid input or business rule violation"},
         401: {"model": ErrorResponse, "description": "Unauthorized"},
+        403: {"model": ErrorResponse, "description": "Forbidden (not owner)"},
         409: {"model": ErrorResponse, "description": "Conflict (e.g., duplicate name)"},
-        422: {"description": "Validation error"},
+        # 422: lo documenta FastAPI por validaciones; opcional dejarlo aquí
     },
-    operation_id="createAccommodation",
 )
 def create_accommodation_endpoint(
-    payload: AccommodationCreate = Form(..., description="Accommodation data in JSON format"),
-    images: List[UploadFile] = File(..., description="List of images for the accommodation"),
+    payload: str = Form(..., description="AccommodationCreate en JSON (string)"),
+    images: List[UploadFile] = File(..., description="Images for the accommodation"),
     db: Session = Depends(get_db),
     user: dict = Depends(verify_token),
 ):
-    data = json.loads(payload)
-    acc_in = AccommodationCreate(**data)  # asegúrate de quitar 'images' del schema si ya no lo usas
+    # Pydantic v2: valida desde string JSON
+    acc_in = AccommodationCreate.model_validate_json(payload)
+
     acc = create_accommodation(db, acc_in, host_id=user["id"])
 
     for f in images or []:

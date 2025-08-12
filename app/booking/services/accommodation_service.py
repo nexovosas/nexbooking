@@ -47,12 +47,16 @@ def search_accommodations_service(
     return query.distinct(Accommodation.id).all()
 
 
-def create_accommodation(db: Session, accommodation_data: AccommodationCreate, host_id: int):
+def create_accommodation(
+    db: Session,
+    accommodation_data: AccommodationCreate,
+    host_id: int,
+) -> Accommodation:
     # 1) Verificar host
     if not _host_exists(db, host_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Host not found for provided token id.")
 
-    # 2) Evitar duplicados (por UNIQUE host_id + name + location)
+    # 2) Evitar duplicados (UNIQUE host_id + name + location)
     exists = (
         db.query(Accommodation)
         .filter(
@@ -63,14 +67,18 @@ def create_accommodation(db: Session, accommodation_data: AccommodationCreate, h
         .first()
     )
     if exists:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Accommodation already exists for this host and location.")
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Accommodation already exists for this host and location.",
+        )
 
-    # 3) Crear registro
-    images_data = accommodation_data.images
-    payload = accommodation_data.model_dump(exclude={"images"})
-    payload["host_id"] = host_id
+    # 3) Convertir Pydantic -> dict y limpiar campos no persistentes
+    payload = accommodation_data.model_dump(exclude_unset=True, exclude_none=True)
+    payload.pop("images", None)   # si tu schema aún lo trae
+    payload.pop("host_id", None)  # el host viene del token, no del payload
 
-    acc = Accommodation(**payload)
+    # 4) Crear registro
+    acc = Accommodation(**payload, host_id=host_id)
     db.add(acc)
     try:
         db.commit()
@@ -82,9 +90,7 @@ def create_accommodation(db: Session, accommodation_data: AccommodationCreate, h
         if "unique" in msg:
             raise HTTPException(status_code=409, detail="Unique constraint violated (host, name, location).")
         raise HTTPException(status_code=409, detail="Integrity error.")
-
     db.refresh(acc)
-
     return acc
 
 def get_all_accommodations(db: Session, skip: int = 0, limit: int = 10):
