@@ -33,7 +33,7 @@ def upgrade() -> None:
     sa.Column('created_at', sa.DateTime(), server_default=sa.text('now()'), nullable=False),
     sa.ForeignKeyConstraint(['host_id'], ['user.id'], name=op.f('fk_accommodations_host_id_user'), ondelete='RESTRICT'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_accommodations')),
-    sa.UniqueConstraint('host_id', 'name', 'location', name='uq_accommodations_host_name_location')
+    sa.UniqueConstraint('host_id', 'name', name='uq_accommodations_host_name')
     )
     op.create_index(op.f('ix_accommodations_host_id'), 'accommodations', ['host_id'], unique=False)
     op.create_index(op.f('ix_accommodations_id'), 'accommodations', ['id'], unique=False)

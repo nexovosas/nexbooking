@@ -31,6 +31,6 @@ class Accommodation(Base):
     images = relationship("Image", back_populates="accommodation", cascade="all, delete-orphan")
 
     __table_args__ = (
-        UniqueConstraint("host_id", "name", "location", name="uq_accommodations_host_name_location"),
-        Index("ix_accommodations_location_name", "location", "name"),
+        UniqueConstraint("host_id", "name", name="uq_accommodations_host_name"),
+        Index("ix_accommodations_name", "name"),
     )

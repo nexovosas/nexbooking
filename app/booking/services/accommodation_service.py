@@ -9,6 +9,7 @@ from fastapi import Depends, HTTPException, status
 from app.booking.models.accommodation_model import Accommodation
 from app.booking.models.room_model import Room
 from app.booking.schemas.accommodation_schema import AccommodationCreate, AccommodationUpdate
+from app.booking.services.s3_service import S3Service
 from app.db.session import get_db
 
 def _host_exists(db: Session, host_id: int) -> bool:
@@ -19,12 +20,14 @@ def _host_exists(db: Session, host_id: int) -> bool:
 def search_accommodations_service(
     db: Session,
     name: Optional[str] = None,
+    location: Optional[str] = None,
     max_price: Optional[float] = None,
     services: Optional[str] = None,
 ):
     # Normalizar entradas
     name = (name or "").strip() or None
     services = (services or "").strip() or None
+    location = (location or "").strip() or None
     # OUTER JOIN para no perder alojamientos sin rooms
     query = (
         db.query(Accommodation)
@@ -34,6 +37,8 @@ def search_accommodations_service(
         query = query.filter(Room.base_price <= max_price)
     if name:
         query = query.filter(Accommodation.name.ilike(f"%{name}%"))
+    if location:
+        query = query.filter(Accommodation.location.ilike(f"%{location}%"))
     if services:
         # Cambia a OR si prefieres que coincida con cualquiera de los términos
         terms = [t.strip().lower() for t in services.split(",") if t.strip()]
@@ -45,7 +50,6 @@ def search_accommodations_service(
         # ors = [Accommodation.services.ilike(f"%{t}%") for t in terms]
         # query = query.filter(or_(*ors))
     return query.distinct(Accommodation.id).all()
-
 
 def create_accommodation(
     db: Session,
@@ -130,7 +134,12 @@ def update_accommodation(db: Session, accommodation_id: int, updates: Accommodat
     return acc
 
 def delete_accommodation(db: Session, accommodation_id: int):
-    acc = get_accommodation(db, accommodation_id)
+    acc = get_accommodation(db, accommodation_id)  # 404 si no existe
+
+    # borra objetos S3 bajo el prefijo del alojamiento
+    s3 = S3Service()
+    s3.delete_prefix(f"accommodations/{accommodation_id}")
+
     db.delete(acc)
     db.commit()
     return acc

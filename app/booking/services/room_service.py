@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.booking.models.room_model import Room
 from app.booking.schemas.room_schema import RoomCreate, RoomUpdate
-from app.booking.services.image_service import create_images
+from app.booking.services.image_service import create_image_for_rooms_from_upload
 
 
 def create_room(db: Session, room_data: RoomCreate) -> Room:
@@ -23,7 +23,7 @@ def create_room(db: Session, room_data: RoomCreate) -> Room:
     db.refresh(new_room)
 
     if images_data:
-        create_images(db=db, image_data=images_data, room_id=new_room.id)
+        create_image_for_rooms_from_upload(db=db, image_data=images_data, room_id=new_room.id)
 
     return new_room
 

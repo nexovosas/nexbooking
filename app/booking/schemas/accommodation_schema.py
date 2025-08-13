@@ -60,7 +60,10 @@ class AccommodationUpdate(BaseModel):
                 "name": "La Montera Glamping",
                 "description": "Updated description for the glamping site",
                 "services": "glamping,spa",
-                "is_active": False
+                "is_active": False,
+                "type": "Glamping",
+                "pet_friendly": True,
+                "location": "Updated Location",
             }
         ]
     })

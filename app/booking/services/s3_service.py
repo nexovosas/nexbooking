@@ -1,67 +1,176 @@
+from __future__ import annotations
 
-import mimetypes, uuid
+import logging
+import mimetypes
+import uuid
 from typing import Optional
+
 from botocore.exceptions import ClientError
 from fastapi import UploadFile
+
 from app.core.s3 import get_s3
 from app.core.config import settings
 
+
 def _join_path(*parts: Optional[str]) -> str:
+    """Une partes de path evitando '//' y preservando jerarquía."""
     return "/".join(p.strip("/") for p in parts if p and p.strip("/"))
 
+
 class S3Service:
-    def __init__(self, base_prefix: str | None = None):
-        self.s3 = get_s3()
+    """
+    Servicio S3/MinIO para:
+      - Subir archivos (upload_file)
+      - Generar URLs presignadas (PUT/GET)
+      - Eliminar objetos (delete_object / delete_objects)
+
+    Guarda/usa KEYS (no URLs públicas) para favorecer buckets privados.
+    """
+
+    def __init__(self, base_prefix: str | None = None) -> None:
+        self.s3 = get_s3()  # boto3 client ya configurado por tu proyecto
         self.bucket = settings.S3_BUCKET
-        self.base_prefix = (base_prefix or settings.S3_PREFIX).strip("/")
-        
-    # Normaliza el nombre del archivo para evitar colisiones
-    # y asegura que tenga una extensión válida
-    # Ejemplo: "uploads/1234567890abcdef1234567890abcdef.jpg"
-    # Si no hay extensión, usa un UUID como nombre
+        # Prefijo base configurable (e.g., "uploads"); evita doble '/'
+        self.base_prefix = (base_prefix or settings.S3_PREFIX or "").strip("/")
+
+    # -----------------------
+    # Helpers de generación de keys
+    # -----------------------
     def _normalize_key(self, folder: str, filename: str) -> str:
-        ext = filename.split(".")[-1].lower() if "." in filename else ""
-        name = uuid.uuid4().hex + (f".{ext}" if ext else "")
+        """
+        Genera una key única y con extensión válida (si la hay).
+        Ej.: uploads/accommodations/1/7f1a...c4.png
+        """
+        ext = ""
+        if "." in filename:
+            _ext = filename.rsplit(".", 1)[-1].lower()
+            # evita extensiones raras tipo '.' al final
+            ext = f".{_ext}" if _ext else ""
+        name = f"{uuid.uuid4().hex}{ext}"
         return _join_path(self.base_prefix, folder, name)
 
-    # Sube un archivo al bucket S3
-    # Retorna un diccionario con la clave del objeto y la URL presignada
-    # El archivo se cierra automáticamente después de la carga
+    def _guess_content_type(self, filename: str, fallback: str = "application/octet-stream") -> str:
+        return mimetypes.guess_type(filename)[0] or fallback
+
+    # -----------------------
+    # Subida directa (backend)
+    # -----------------------
     def upload_file(self, file: UploadFile, folder: str = "") -> dict:
-        key = self._normalize_key(folder, file.filename)
-        content_type = file.content_type or mimetypes.guess_type(file.filename)[0] or "application/octet-stream"
-        self.s3.upload_fileobj(file.file, self.bucket, key, ExtraArgs={"ContentType": content_type, "ACL": "private"})
-        file.file.close()
+        """
+        Sube un archivo vía backend (fileobj) al bucket con ACL private.
+        Retorna: {"key": "<obj-key>"}
+        """
+        key = self._normalize_key(folder, file.filename or "blob")
+        content_type = file.content_type or self._guess_content_type(file.filename or "blob")
+        try:
+            self.s3.upload_fileobj(
+                Fileobj=file.file,
+                Bucket=self.bucket,
+                Key=key,
+                ExtraArgs={"ContentType": content_type, "ACL": "private"},
+            )
+        finally:
+            # Asegura cerrar el file handle
+            try:
+                file.file.close()
+            except Exception:
+                pass
         return {"key": key}
 
-    # Genera una URL presignada para subir un archivo
-    # Si no se especifica 'key', usa un UUID como nombre
-    # Permite especificar el tipo de contenido para la carga
-    # Retorna un diccionario con la clave, URL y método HTTP
-    # Ejemplo: {"key": "uploads/1234567890abcdef1234567890abcdef.jpg", "url": "https://...", "method": "PUT"}
-    def presign_put_url(self, key: Optional[str] = None, folder: str = "", content_type: str = "application/octet-stream") -> dict:
+    # -----------------------
+    # Presign (cliente sube/descarga directo)
+    # -----------------------
+    def presign_put_url(
+        self,
+        key: Optional[str] = None,
+        folder: str = "",
+        content_type: str = "application/octet-stream",
+        expires: Optional[int] = None,
+    ) -> dict:
+        """
+        Crea una URL presignada (PUT) para que el cliente suba directo a S3.
+        Retorna: {"key": "...", "url": "...", "method": "PUT"}
+        """
         if not key:
             key = self._normalize_key(folder, "blob")
-        url = self.s3.generate_presigned_url(
-            "put_object",
-            Params={"Bucket": self.bucket, "Key": key, "ContentType": content_type},
-            ExpiresIn=settings.S3_PRESIGNED_EXPIRES,
-        )
+        try:
+            url = self.s3.generate_presigned_url(
+                ClientMethod="put_object",
+                Params={"Bucket": self.bucket, "Key": key, "ContentType": content_type},
+                ExpiresIn=expires or settings.S3_PRESIGNED_EXPIRES,
+            )
+        except ClientError as e:
+            logging.error("S3 presign_put_url error: %s", e)
+            raise
         return {"key": key, "url": url, "method": "PUT"}
 
-    # Genera una URL presignada para obtener un objeto
-    # Permite acceder al archivo sin necesidad de autenticación
-    # Retorna la URL presignada para descargar el objeto
-    # Ejemplo: "https://s3.nexovo.com.co/uploads/1234567890abcdef1234567890abcdef.jpg?..."
-    def presign_get_url(self, key: str) -> str:
-        return self.s3.generate_presigned_url(
-            "get_object",
-            Params={"Bucket": self.bucket, "Key": key},
-            ExpiresIn=settings.S3_PRESIGNED_EXPIRES,
-        )
+    def presign_put_urls(
+        self,
+        count: int = 1,
+        folder: str = "",
+        content_type: str = "application/octet-stream",
+        expires: Optional[int] = None,
+    ) -> list[dict]:
+        """Convenience: devuelve N URLs presignadas de subida."""
+        return [self.presign_put_url(folder=folder, content_type=content_type, expires=expires) for _ in range(count)]
 
-    # Elimina un objeto del bucket S3
-    # Si el objeto no existe, ignora el error
-    # No retorna nada, solo asegura que el objeto se elimine
-    def delete_object(self, key: str) -> None:
-        self.s3.delete_object(Bucket=self.bucket, Key=key)
+    def presign_get_url(self, key: str, expires: Optional[int] = None) -> str:
+        """
+        Crea una URL presignada (GET) para descargar un objeto privado.
+        """
+        try:
+            return self.s3.generate_presigned_url(
+                ClientMethod="get_object",
+                Params={"Bucket": self.bucket, "Key": key},
+                ExpiresIn=expires or settings.S3_PRESIGNED_EXPIRES,
+            )
+        except ClientError as e:
+            logging.error("S3 presign_get_url error: %s", e)
+            raise
+
+    # -----------------------
+    # Eliminación
+    # -----------------------
+    def delete_objects(self, keys: list[str]) -> None:
+        if not keys:
+            return
+
+        # Limpia, deduplica
+        normalized: list[str] = list({k.strip() for k in keys if k and k.strip()})
+        if not normalized:
+            return
+
+        # S3 permite hasta 1000 keys por batch
+        for i in range(0, len(normalized), 1000):
+            chunk = normalized[i : i + 1000]
+            try:
+                response = self.s3.delete_objects(
+                    Bucket=self.bucket,
+                    Delete={"Objects": [{"Key": k} for k in chunk], "Quiet": True},
+                )
+                deleted = response.get("Deleted", [])
+                errors = response.get("Errors", [])
+                if deleted:
+                    logging.info("S3: %d objetos eliminados", len(deleted))
+                if errors:
+                    logging.warning("S3: errores al eliminar: %s", errors)
+            except ClientError as e:
+                logging.error("S3 delete_objects error: %s", e)
+                raise
+
+    # -----------------------
+    # Utilidades opcionales
+    # -----------------------
+    def object_exists(self, key: str) -> bool:
+        """Verifica existencia via HEAD (sin descargar)."""
+        if not key or not key.strip():
+            return False
+        try:
+            self.s3.head_object(Bucket=self.bucket, Key=key.strip())
+            return True
+        except ClientError as e:
+            # 404 Not Found u otros códigos indican que no existe o sin permisos
+            if e.response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404:
+                return False
+            logging.debug("S3 head_object error: %s", e)
+            return False

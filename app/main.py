@@ -80,6 +80,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+setup_exception_handlers(app)
+
 # -----------------------------------------------------------------------------
 # OpenAPI con branding y servers correctos
 # -----------------------------------------------------------------------------
@@ -164,4 +166,4 @@ app.include_router(s3_router,            prefix=API_PREFIX, tags=["s3"])
 # -----------------------------------------------------------------------------
 # Global exception handlers
 # -----------------------------------------------------------------------------
-setup_exception_handlers(app)
+
