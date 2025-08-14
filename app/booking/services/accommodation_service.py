@@ -60,13 +60,12 @@ def create_accommodation(
     if not _host_exists(db, host_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Host not found for provided token id.")
 
-    # 2) Evitar duplicados (UNIQUE host_id + name + location)
+    # 2) Evitar duplicados (UNIQUE host_id + name)
     exists = (
         db.query(Accommodation)
         .filter(
             Accommodation.host_id == host_id,
             Accommodation.name == accommodation_data.name,
-            Accommodation.location == accommodation_data.location,
         )
         .first()
     )

@@ -62,12 +62,14 @@ def _enforce_file_rules(file: UploadFile):
 def create_image_for_accommodation_from_upload(
     file: UploadFile,
     accommodation_id: int,
+    room_id: int,
+    folder_name: str,
     db: Session,
 ) -> Image:
     _enforce_file_rules(file)
 
     s3 = S3Service()
-    folder = f"accommodations/{accommodation_id}"
+    folder = f"{folder_name}/{(accommodation_id if room_id is None else room_id)}"
     try:
         obj = s3.upload_file(file, folder=folder)  # {"key": "..."}
     except ClientError as e:
@@ -80,6 +82,7 @@ def create_image_for_accommodation_from_upload(
         url=obj["key"],                 # guardamos la KEY (no URL) en BD
         alt_text=file.filename or None,
         accommodation_id=accommodation_id,
+        room_id=room_id,
     )
     db.add(db_image)
     db.commit()
@@ -114,6 +117,7 @@ def create_image_for_rooms_from_upload(
 def create_images_for_accommodation_from_keys(
     db: Session,
     accommodation_id: int,
+    room_id: int,
     keys: List[str],
     alt_texts: Optional[List[Optional[str]]] = None,
 ) -> int:
@@ -132,6 +136,7 @@ def create_images_for_accommodation_from_keys(
             url=key,
             alt_text=(alt_texts[idx] if alt_texts and idx < len(alt_texts) else None),
             accommodation_id=accommodation_id,
+            room_id=room_id,
         )
         db.add(db_image)
         created += 1
@@ -139,13 +144,13 @@ def create_images_for_accommodation_from_keys(
     db.commit()
     return created
 
-def delete_images_by_ids(db: Session, image_ids: List[int], accommodation_id: int) -> int:
+def delete_images_by_ids(db: Session, image_ids: List[int], accommodation_id: int, room_id: int) -> int:
     if not image_ids:
         return 0
 
     imgs = (
         db.query(Image)
-        .filter(Image.accommodation_id == accommodation_id, Image.id.in_(image_ids))
+        .filter(Image.room_id == room_id if accommodation_id is None else Image.accommodation_id == accommodation_id, Image.id.in_(image_ids))
         .all()
     )
     if not imgs:
