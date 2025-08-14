@@ -138,7 +138,7 @@ def delete_accommodation(db: Session, accommodation_id: int):
 
     # borra objetos S3 bajo el prefijo del alojamiento
     s3 = S3Service()
-    s3.delete_prefix(f"accommodations/{accommodation_id}")
+    s3.delete_objects(f"accommodations/{accommodation_id}")
 
     db.delete(acc)
     db.commit()

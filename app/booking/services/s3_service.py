@@ -55,27 +55,30 @@ class S3Service:
     # -----------------------
     # Subida directa (backend)
     # -----------------------
+    # dentro de la clase S3Service
     def upload_file(self, file: UploadFile, folder: str = "") -> dict:
         """
-        Sube un archivo vía backend (fileobj) al bucket con ACL private.
-        Retorna: {"key": "<obj-key>"}
+        Sube el UploadFile al bucket en la ruta {base_prefix}/{folder}/{uuid.ext}.
+        Asegura puntero al inicio y cierra el stream al final.
         """
-        key = self._normalize_key(folder, file.filename or "blob")
-        content_type = file.content_type or self._guess_content_type(file.filename or "blob")
+        key = self._normalize_key(folder, file.filename)
+        content_type = file.content_type or mimetypes.guess_type(file.filename)[0] or "application/octet-stream"
+
+        # robustez: garantizamos subir desde el inicio del stream
         try:
-            self.s3.upload_fileobj(
-                Fileobj=file.file,
-                Bucket=self.bucket,
-                Key=key,
-                ExtraArgs={"ContentType": content_type, "ACL": "private"},
-            )
-        finally:
-            # Asegura cerrar el file handle
-            try:
-                file.file.close()
-            except Exception:
-                pass
+            file.file.seek(0)
+        except Exception:
+            pass
+
+        self.s3.upload_fileobj(
+            file.file,
+            self.bucket,
+            key,
+            ExtraArgs={"ContentType": content_type, "ACL": "private"},
+        )
+        file.file.close()
         return {"key": key}
+
 
     # -----------------------
     # Presign (cliente sube/descarga directo)

@@ -1,21 +1,30 @@
 from __future__ import annotations
-import json
-from typing import List, Optional, Type, Union
 
-from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, Path, UploadFile, status, Request
-from fastapi.responses import Response
-from pydantic import BaseModel
+# Stdlib
+import json
+from json import JSONDecodeError
+from typing import List, Optional, Union, Iterable
+
+# FastAPI / SQLAlchemy
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Path,
+    UploadFile,
+    status,
+)
 from sqlalchemy.orm import Session
 
-from app.auth.verify_token import verify_token  # normalized user dict with "id" and "role"
-from app.booking.services.image_service import (
-    create_image_for_accommodation_from_upload,
-    create_images_for_accommodation_from_keys,
-    delete_images_by_ids,
-)
-from app.booking.services.s3_service import S3Service
-from app.db.session import get_db
+# Proyecto
+from app.auth.verify_token import verify_token
 from app.common.schemas import ErrorResponse
+from app.db.session import get_db
+import logging
+
+log = logging.getLogger("uvicorn.error")
 
 from app.booking.schemas.accommodation_schema import (
     AccommodationCreate,
@@ -31,7 +40,26 @@ from app.booking.services.accommodation_service import (
     search_accommodations_service,
     get_accommodation,
 )
+from app.booking.services.image_service import (
+    create_image_for_accommodation_from_upload,
+    create_images_for_accommodation_from_keys,
+    delete_images_by_ids,
+)
+from app.booking.services.s3_service import S3Service
 
+
+router = APIRouter(tags=["Accommodations"], prefix="/accommodations")
+
+# =========================
+#  Config de negocio
+# =========================
+MAX_IMAGES_PER_ACC = 10         # Máximo total por alojamiento
+MAX_FILES_CREATE = 10           # Máximo archivos aceptados al crear
+
+
+# =========================
+#  Helpers
+# =========================
 def _ensure_list(v):
     if v is None:
         return []
@@ -39,13 +67,24 @@ def _ensure_list(v):
         return v
     return [v]
 
-def _parse_delete_ids(raw):
+
+def _parse_delete_ids(raw: Union[None, str, List[int], List[str]]) -> List[int]:
+    """
+    Acepta:
+      - lista de enteros [1,2]
+      - lista de strings ['1','2']
+      - string CSV "1,2,3"
+      - JSON string "[1,2,3]"
+      - string de un solo valor "14"
+    Devuelve siempre List[int].
+    """
     if raw is None:
         return []
     if isinstance(raw, list):
         return [int(x) for x in raw]
     s = str(raw).strip()
-    # admite "[1,2]", "1,2,3" o "14"
+    if not s:
+        return []
     try:
         j = json.loads(s)
         if isinstance(j, list):
@@ -54,65 +93,42 @@ def _parse_delete_ids(raw):
         pass
     return [int(x) for x in s.split(",") if x.strip()]
 
-async def _parse_updates_json_from_form(request: Request) -> Optional[str]:
+
+def _to_str_list(raw: Union[None, str, List[str]]) -> List[str]:
     """
-    Lee 'updates_json' desde form-data.
-    Si Swagger lo envía como 'archivo' (blob) lo lee y decodifica;
-    si viene como texto, lo devuelve tal cual.
+    Normaliza a lista de strings, limpiando espacios y vacíos.
     """
-    form = await request.form()
-    v = form.get("updates_json")
-    if v is None:
-        return None
-    # Si llegó como UploadFile (filename="blob")
-    if hasattr(v, "read") or hasattr(v, "file"):
-        try:
-            data = await v.read() if hasattr(v, "read") else v.file.read()
-        except Exception:
-            data = v.file.read()
-        try:
-            return data.decode("utf-8")
-        except Exception:
-            return data.decode("latin-1", errors="ignore")
-    # Si llegó como texto
-    return str(v)
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(x).strip() for x in raw if str(x).strip()]
+    s = str(raw).strip()
+    return [s] if s else []
+
 
 def _attach_presigned_urls(acc):
     """
     Reemplaza en memoria (solo para respuesta) las keys S3 por presigned GET URLs.
-    NO hace commit, solo muta los objetos antes de serializar.
-    Acepta Accommodation o lista de Accommodation.
     """
     if acc is None:
         return acc
-
     s3 = S3Service()
 
-    def _sign_image(img):
-        try:
-            u = getattr(img, "url", None)
-            if u and isinstance(u, str) and not u.lower().startswith("http"):
-                # es una key → la firmamos
-                img.url = s3.presign_get_url(u)
-        except Exception:
-            pass
+    def _sign(img):
+        u = getattr(img, "url", None)
+        if isinstance(u, str) and not u.lower().startswith(("http://", "https://")):
+            img.url = s3.presign_get_url(u)
 
     if isinstance(acc, list):
         for a in acc:
             for img in getattr(a, "images", []) or []:
-                _sign_image(img)
+                _sign(img)
         return acc
 
-    # objeto único
     for img in getattr(acc, "images", []) or []:
-        _sign_image(img)
+        _sign(img)
     return acc
 
-
-router = APIRouter(tags=["Accommodations"], prefix="/accommodations")
-
-MAX_IMAGES_PER_ACC = 10
-MAX_FILES_CREATE = 10
 
 def _validate_images_count(images: Optional[List[UploadFile]]):
     if not images:
@@ -120,6 +136,20 @@ def _validate_images_count(images: Optional[List[UploadFile]]):
     if len(images) > MAX_FILES_CREATE:
         raise HTTPException(status_code=422, detail=f"Max {MAX_FILES_CREATE} images allowed")
 
+def _uploads_to_list(new_images) -> List[UploadFile]:
+    if new_images is None:
+        return []
+    if isinstance(new_images, UploadFile):
+        return [new_images]
+    if isinstance(new_images, list):
+        return [f for f in new_images if isinstance(f, UploadFile)]
+    return []
+
+# =========================
+#  Endpoints
+# =========================
+
+# ------- CREATE -------
 @router.post(
     "/",
     response_model=AccommodationOut,
@@ -129,11 +159,9 @@ def _validate_images_count(images: Optional[List[UploadFile]]):
     operation_id="createAccommodation",
     responses={
         201: {"description": "Created"},
-        400: {"model": ErrorResponse, "description": "Invalid input or business rule violation"},
         401: {"model": ErrorResponse, "description": "Unauthorized"},
         403: {"model": ErrorResponse, "description": "Forbidden (not owner)"},
-        409: {"model": ErrorResponse, "description": "Conflict (e.g., duplicate name)"},
-        # 422: lo documenta FastAPI por validaciones; opcional dejarlo aquí
+        409: {"model": ErrorResponse, "description": "Conflict (duplicate)"},
     },
 )
 def create_accommodation_endpoint(
@@ -142,29 +170,39 @@ def create_accommodation_endpoint(
     db: Session = Depends(get_db),
     user: dict = Depends(verify_token),
 ):
-    # 1) Validaciones
+    """
+    Crea el alojamiento y sube imágenes. `payload` debe ser un JSON string válido (Pydantic v2).
+    """
     acc_in = AccommodationCreate.model_validate_json(payload)
     _validate_images_count(images)
 
-    # 2) Crear alojamiento
     acc = create_accommodation(db, acc_in, host_id=user["id"])
 
-    # 3) Subir imágenes (service ya valida tipo + tamaño)
+    # Subir imágenes (si llegan)
     for f in images or []:
+        try:
+            f.file.seek(0)  # robustez por si algún middleware leyó el stream
+        except Exception:
+            pass
         create_image_for_accommodation_from_upload(f, acc.id, db)
 
+    # (Opcional) Firmar URLs para respuesta
+    _attach_presigned_urls(acc)
     return acc
 
 
+# ------- PRESIGN -------
 @router.post(
     "/{accommodation_id}/images/presign",
     summary="Get presigned PUT URLs for direct S3 upload",
+    description="Devuelve URLs presignadas para subir imágenes directo a S3/MinIO.",
+    operation_id="presignAccommodationImages",
     responses={200: {"description": "OK"}},
 )
 def presign_accommodation_images(
     accommodation_id: int = Path(..., gt=0),
-    count: int = Body(1, ge=1, le=MAX_IMAGES_PER_ACC),
-    content_type: str = Body("image/jpeg"),
+    count: int = Form(1, ge=1, le=MAX_IMAGES_PER_ACC),
+    content_type: str = Form("image/jpeg"),
     db: Session = Depends(get_db),
     user: dict = Depends(verify_token),
 ):
@@ -172,73 +210,49 @@ def presign_accommodation_images(
     if acc.host_id != user.get("id"):
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    s3 = S3Service()
-    # Valida que no se exceda el cupo si todas estas se llegan a registrar
     if len(acc.images or []) + count > MAX_IMAGES_PER_ACC:
         raise HTTPException(status_code=422, detail=f"Max {MAX_IMAGES_PER_ACC} images per accommodation")
 
+    s3 = S3Service()
     return s3.presign_put_urls(count=count, folder=f"accommodations/{accommodation_id}", content_type=content_type)
 
 
-@router.get(
-    "/",
-    response_model=List[AccommodationOut],
-    summary="List all accommodations",
-    description="Retrieves all accommodations with optional pagination.",
-    responses={
-        200: {"description": "Successful response"},
-    },
-    operation_id="listAccommodations",
-)
+# ------- LIST / MY / SEARCH / GET -------
+@router.get("/", response_model=List[AccommodationOut], operation_id="listAccommodations")
 def read_all_accommodations(db: Session = Depends(get_db)):
-    return get_all_accommodations(db)
+    accs = get_all_accommodations(db)
+    _attach_presigned_urls(accs)
+    return accs
 
-@router.get(
-    "/my",
-    response_model=List[AccommodationOut],
-    summary="Get accommodations owned by authenticated host",
-    description="Returns accommodations owned by the authenticated host.",
-    responses={
-        200: {"description": "Successful response"},
-        401: {"model": ErrorResponse, "description": "Unauthorized"},
-    },
-    operation_id="listMyAccommodations",
-)
-def get_my_accommodations(
-    db: Session = Depends(get_db),
-    user: dict = Depends(verify_token),
-):
+
+@router.get("/my", response_model=List[AccommodationOut], operation_id="listMyAccommodations")
+def get_my_accommodations(db: Session = Depends(get_db), user: dict = Depends(verify_token)):
     host_id = user.get("id")
     if host_id is None:
         raise HTTPException(status_code=401, detail="Invalid token: user id missing")
-    return get_accommodations_by_host(db, host_id)
+    accs = get_accommodations_by_host(db, host_id)
+    _attach_presigned_urls(accs)
+    return accs
 
-@router.get(
-    "/search",
-    response_model=List[AccommodationOut],
-    summary="Search accommodations with filters",
-    description="Searches accommodations by name, max price, and services.",
-    responses={200: {"description": "Successful response"}},
-    operation_id="searchAccommodations",
-)
+
+@router.get("/search", response_model=List[AccommodationOut], operation_id="searchAccommodations")
 def search_accommodations(
-    name: Optional[str] = Query(None, description="Filter by name"),
-    location: Optional[str] = Query(None, description="Filter by location"),
-    max_price: Optional[float] = Query(None, ge=0, description="Maximum price"),
-    services: Optional[str] = Query(None, description="Comma-separated list of services"),
+    name: Optional[str] = None,
+    location: Optional[str] = None,
+    max_price: Optional[float] = None,
+    services: Optional[str] = None,
     db: Session = Depends(get_db),
 ):
-    return search_accommodations_service(db, name, location, max_price, services)
+    accs = search_accommodations_service(db, name, location, max_price, services)
+    _attach_presigned_urls(accs)
+    return accs
+
 
 @router.get(
     "/{accommodation_id}",
     response_model=AccommodationOut,
     summary="Retrieve an accommodation by ID",
-    description="Fetches a single accommodation by its unique ID.",
-    responses={
-        200: {"description": "Successful response"},
-        404: {"model": ErrorResponse, "description": "Accommodation not found"},
-    },
+    responses={200: {"description": "OK"}, 404: {"model": ErrorResponse}},
     operation_id="getAccommodationById",
 )
 def read_one_accommodation(
@@ -246,27 +260,24 @@ def read_one_accommodation(
     db: Session = Depends(get_db),
 ):
     acc = get_accommodation(db, accommodation_id)
-
-    # Convertir keys S3 a URLs presignadas SOLO para la respuesta
-    s3 = S3Service()
-    for img in (acc.images or []):
-        if isinstance(getattr(img, "url", None), str) and not img.url.lower().startswith(("http://", "https://")):
-            img.url = s3.presign_get_url(img.url)
-
+    _attach_presigned_urls(acc)
     return acc
 
 
+# ------- UPDATE (Multipart) -------
 @router.put(
     "/{accommodation_id}",
     response_model=AccommodationOut,
     summary="Update accommodation (multipart): add/remove images and optional fields",
     description=(
-        "Multipart to add new images, remove existing images, and update fields.\n"
-        "- `updates_json`: JSON string matching AccommodationUpdate (optional)\n"
-        "- `new_images`: files to upload (optional)\n"
-        "- `delete_image_ids`: repeat field to delete multiple images\n"
-        "- `new_image_keys`: S3 keys already uploaded via presigned (optional)"
+        "Multipart para agregar/quitar imágenes y actualizar campos.\n"
+        "- `updates_json`: JSON string matching AccommodationUpdate (opcional)\n"
+        "- `new_image`: un archivo (opcional)\n"
+        "- `new_images`: varios archivos (opcional, usa 'Add item')\n"
+        "- `delete_image_ids`: IDs a borrar (array o '1,2,3' o '[1,2,3]')\n"
+        "- `new_image_keys`: keys S3 ya subidas (array o string)\n"
     ),
+    operation_id="updateAccommodationMultipart",
     openapi_extra={
         "requestBody": {
             "content": {
@@ -276,37 +287,38 @@ def read_one_accommodation(
                         "properties": {
                             "updates_json": {
                                 "type": "string",
-                                "description": "JSON string of AccommodationUpdate",
+                                "description": "JSON string de AccommodationUpdate",
                                 "example": (
-                                    '{"name":"La Montera Glamping","description":"Updated",'
-                                    '"services":"glamping,spa","is_active":true,"type":"Hotel",'
-                                    '"pet_friendly":true,"location":"San Vicente Ferrer"}'
+                                    "{\"name\":\"La Montera 5\",\"description\":\"Updated description\","
+                                    "\"services\":\"glamping,spa\",\"is_active\":false,\"type\":\"Glamping\","
+                                    "\"pet_friendly\":true,\"location\":\"Updated Location\"}"
                                 ),
                             },
-                            "new_images": {
+                            "new_images": {  # <-- multiple files
                                 "type": "array",
                                 "items": {"type": "string", "format": "binary"},
-                                "description": "Upload one or more image files."
+                                "description": "Sube VARIAS imágenes (usa 'Add item')."
                             },
                             "delete_image_ids": {
                                 "type": "array",
-                                "items": {"type": "integer", "format": "int32"},
-                                "description": "IDs of images to delete (repeat field)."
+                                "items": {"type": "integer"},
+                                "description": "IDs de imágenes a eliminar."
                             },
                             "new_image_keys": {
                                 "type": "array",
                                 "items": {"type": "string"},
-                                "description": "S3 keys already uploaded via presigned PUT."
+                                "description": "S3 keys ya subidas por presigned PUT."
                             },
                         },
                         "required": []
                     },
                     "encoding": {
-                        "updates_json": {"contentType": "application/json"},
-                        "delete_image_ids": {"style": "form", "explode": True},
+                        # ¡NO forzar updates_json a application/json!
+                        "new_image": {"style": "form", "explode": True},
                         "new_images": {"style": "form", "explode": True},
-                        "new_image_keys": {"style": "form", "explode": True}
-                    }
+                        "delete_image_ids": {"style": "form", "explode": True},
+                        "new_image_keys": {"style": "form", "explode": True},
+                    },
                 }
             }
         }
@@ -314,99 +326,87 @@ def read_one_accommodation(
 )
 async def update_accommodation_endpoint(
     accommodation_id: int = Path(..., gt=0, description="Accommodation ID"),
-    new_images: Optional[Union[UploadFile, List[UploadFile]]] = File(None, description="Files to upload"),
-    delete_image_ids: Optional[Union[str, List[int]]] = Form(None, description="IDs to delete"),
-    new_image_keys: Optional[Union[str, List[str]]] = Form(None, description="S3 keys uploaded via presigned URLs"),
+
+    # TEXTO (no blob)
+    updates_json: Optional[str] = Form(None, description="AccommodationUpdate como JSON string"),
+
+    # ARCHIVOS: ofrecemos single y multiple para que /docs sea cómodo
+    new_images: List[UploadFile] = File(None, description="Sube VARIAS imágenes (usa 'Add item')"),
+
+    # FLEXIBLES (aceptan array o string)
+    delete_image_ids: Optional[Union[List[int], str]] = Form(None, description="IDs de imágenes a eliminar"),
+    new_image_keys: Optional[Union[List[str], str]] = Form(None, description="S3 keys ya subidas por presigned"),
+
     db: Session = Depends(get_db),
     user: dict = Depends(verify_token),
-    request: Request = None,
 ):
     # 0) Auth & ownership
     acc = get_accommodation(db, accommodation_id)
     if acc.host_id != user.get("id"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
 
-    # 1) updates_json (lee archivo o texto del form)
-    updates_json_str = await _parse_updates_json_from_form(request)
-    if updates_json_str:
-        updates = AccommodationUpdate.model_validate_json(updates_json_str)
+    # 1) Actualizar campos
+    if updates_json:
+        try:
+            payload = json.loads(updates_json)
+        except JSONDecodeError as e:
+            raise HTTPException(
+                status_code=422,
+                detail=f"updates_json is not valid JSON (line {e.lineno}, col {e.colno}): {e.msg}",
+            )
+        updates = AccommodationUpdate.model_validate(payload)
         acc = update_accommodation(db, accommodation_id, updates)
 
-    # 2) eliminar imágenes (IDs pueden venir lista/CSV/JSON/uno)
+    # 2) Normalizaciones
+    #files_to_add: List[UploadFile] = []
+    #if new_images:
+    #   files_to_add.extend([f for f in new_images if isinstance(f, UploadFile) and getattr(f, "filename", "")])
+
     ids_to_delete = _parse_delete_ids(delete_image_ids)
+    keys_to_add = list(dict.fromkeys(_to_str_list(new_image_keys)))  # dedupe
 
-    # 3a) normalizar archivos a subir (acepta 1 o lista + fallback desde form)
-    files_to_add: List[UploadFile] = []
-    if isinstance(new_images, UploadFile):
-        files_to_add = [new_images]
-    elif isinstance(new_images, list):
-        files_to_add = [f for f in new_images if isinstance(f, UploadFile)]
-    if not files_to_add:
-        form = await request.form()
-        form_files = form.getlist("new_images")
-        files_to_add = [f for f in form_files if isinstance(f, UploadFile)]
-
-    # 3b) normalizar keys a registrar (acepta string/list + fallback desde form)
-    keys_to_add: List[str] = []
-    if isinstance(new_image_keys, str):
-        keys_to_add = [new_image_keys]
-    elif isinstance(new_image_keys, list):
-        keys_to_add = [k for k in new_image_keys if isinstance(k, str)]
-    if not keys_to_add:
-        form = await request.form()
-        klist = form.getlist("new_image_keys")
-        keys_to_add = [k.strip() for k in klist if isinstance(k, str) and k.strip()]
-    # dedupe keys
-    keys_to_add = list(dict.fromkeys([k.strip() for k in keys_to_add if k and k.strip()]))
-
-    # 3c) Validación de cupo total final
+    # 3) Cupo
     existing = len(acc.images or [])
-    to_delete = len(ids_to_delete or [])
-    to_add_uploads = len(files_to_add)
-    to_add_keys = len(keys_to_add)
-    final_count = existing - to_delete + to_add_uploads + to_add_keys
+    final_count = existing - len(ids_to_delete) + (0 if new_images is None else len(new_images)) + len(keys_to_add)
     if final_count > MAX_IMAGES_PER_ACC:
         raise HTTPException(status_code=422, detail=f"Max {MAX_IMAGES_PER_ACC} images per accommodation")
 
-    # 4) aplicar borrado
+    # 4) Aplicar cambios
     if ids_to_delete:
         delete_images_by_ids(db, ids_to_delete, accommodation_id)
 
-    # 5) subir archivos nuevos (service valida tipo+tamaño)
-    for f in files_to_add:
-        if f and getattr(f, "filename", ""):
-            create_image_for_accommodation_from_upload(f, accommodation_id, db)
+    for f in new_images or []:
+        try:
+            f.file.seek(0)
+        except Exception:
+            pass
+        create_image_for_accommodation_from_upload(f, accommodation_id, db)
 
-    # 6) registrar keys presigned en un solo call
     if keys_to_add:
         create_images_for_accommodation_from_keys(db, accommodation_id, keys_to_add)
 
-    # 7) retornar actualizado (con URLs firmadas)
+    # 5) Respuesta
     acc = get_accommodation(db, accommodation_id)
     _attach_presigned_urls(acc)
     return acc
 
+
+
+# ------- DELETE -------
 @router.delete(
     "/{accommodation_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete an accommodation",
-    description="Deletes an accommodation by its ID. Requires authentication and ownership.",
-    response_model=None,
-    responses={
-        204: {"description": "Deleted. No content."},
-        401: {"model": ErrorResponse, "description": "Unauthorized"},
-        403: {"model": ErrorResponse, "description": "Forbidden (not owner)"},
-        404: {"model": ErrorResponse, "description": "Accommodation not found"},
-    },
+    responses={204: {"description": "Deleted. No content."}, 404: {"model": ErrorResponse}},
     operation_id="deleteAccommodation",
 )
 def delete_accommodation_endpoint(
     accommodation_id: int = Path(..., gt=0, description="Accommodation ID"),
     db: Session = Depends(get_db),
     user: dict = Depends(verify_token),
-) -> Response:
-    acc = get_accommodation(db, accommodation_id)  # raises 404 if not found
+):
+    acc = get_accommodation(db, accommodation_id)
     if acc.host_id != user.get("id"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     delete_accommodation(db, accommodation_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return None

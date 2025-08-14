@@ -1,5 +1,7 @@
 # app/booking/services/image_service.py
 from typing import Optional, List
+import mimetypes
+
 from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
 from botocore.exceptions import ClientError
@@ -11,13 +13,34 @@ from .s3_service import S3Service
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
 
+def _normalize_mime(file: UploadFile) -> str:
+    """
+    Devuelve un MIME “seguro”:
+    - Normaliza image/jpg -> image/jpeg
+    - Si llega application/octet-stream o vacío, intenta deducir por extensión (.jpg/.png/.webp)
+    """
+    ct = (file.content_type or "").lower().strip()
+    if ct == "image/jpg":
+        ct = "image/jpeg"
+    if ct and ct != "application/octet-stream":
+        return ct
+
+    guessed, _ = mimetypes.guess_type(file.filename or "")
+    guessed = (guessed or "").lower().strip()
+    if guessed == "image/jpg":
+        guessed = "image/jpeg"
+
+    return guessed or ct or "application/octet-stream"
+
 def _enforce_file_rules(file: UploadFile):
-    # 1) Tipo MIME
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
+    # 1) Tipo MIME (normalizado/fallback por extensión)
+    ct = _normalize_mime(file)
+    if ct not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-            detail=f"Unsupported file type: {file.content_type}. Allowed: {', '.join(sorted(ALLOWED_CONTENT_TYPES))}",
+            detail=f"Unsupported file type: {ct}. Allowed: {', '.join(sorted(ALLOWED_CONTENT_TYPES))}",
         )
+
     # 2) Tamaño por streaming (sin cargar todo a RAM)
     CHUNK = 1024 * 1024
     total = 0
@@ -59,10 +82,9 @@ def create_image_for_accommodation_from_upload(
         accommodation_id=accommodation_id,
     )
     db.add(db_image)
-    db.commit()                        # ⬅️ importante
-    db.refresh(db_image)               # ⬅️ para que tenga id, etc.
+    db.commit()
+    db.refresh(db_image)
     return db_image
-
 
 def create_image_for_rooms_from_upload(
     file: UploadFile,
@@ -70,20 +92,17 @@ def create_image_for_rooms_from_upload(
     db: Session,
     alt_text: Optional[str] = None,
 ) -> Image:
-    """
-    Sube el archivo a S3/MinIO y crea el registro Image apuntando a la KEY.
-    """
     _enforce_file_rules(file)
 
     s3 = S3Service()
     folder = f"rooms/{rooms_id}"
     try:
-        obj = s3.upload_file(file, folder=folder)  # {"key": "...", "url": presigned_get, ...}
+        obj = s3.upload_file(file, folder=folder)
     except ClientError as e:
         raise HTTPException(status_code=502, detail=f"S3 upload failed: {e.response.get('Error', {}).get('Message', 'unknown')}")
 
     db_image = Image(
-        url=obj["key"],           # Guardamos la KEY (seguro para privados)
+        url=obj["key"],
         alt_text=alt_text or None,
         rooms_id=rooms_id,
     )
@@ -98,14 +117,9 @@ def create_images_for_accommodation_from_keys(
     keys: List[str],
     alt_texts: Optional[List[Optional[str]]] = None,
 ) -> int:
-    """
-    Registra en DB imágenes que YA fueron subidas a S3 mediante presigned PUT.
-    Guarda la KEY en `url` (recomendado para buckets privados).
-    """
     if not keys:
         return 0
 
-    # Normaliza y deduplica
     norm = [k.strip() for k in keys if k and k.strip()]
     seen = set()
     norm = [k for k in norm if not (k in seen or seen.add(k))]
@@ -125,16 +139,7 @@ def create_images_for_accommodation_from_keys(
     db.commit()
     return created
 
-def delete_images_by_ids(
-    db: Session,
-    image_ids: List[int],
-    accommodation_id: int,
-) -> int:
-    """
-    Elimina imágenes por IDs pertenecientes al accommodation dado.
-    - Borra en batch en S3 con S3Service.delete_objects(...)
-    - Elimina filas de DB en la misma transacción.
-    """
+def delete_images_by_ids(db: Session, image_ids: List[int], accommodation_id: int) -> int:
     if not image_ids:
         return 0
 
@@ -149,18 +154,13 @@ def delete_images_by_ids(
     s3_keys = [img.url for img in imgs if img.url]
     s3 = S3Service()
 
-    # 1) Borrado en S3 (batch)
     try:
+        # ✅ Borrado en lote (hasta 1000 por request)
         s3.delete_objects(s3_keys)
     except ClientError as e:
-        # Transporta un error 502 con detalle del proveedor
         msg = e.response.get("Error", {}).get("Message", "unknown")
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"S3 delete_objects failed: {msg}",
-        )
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"S3 delete_objects failed: {msg}")
 
-    # 2) Borrado en DB
     for img in imgs:
         db.delete(img)
     db.commit()
