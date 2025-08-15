@@ -1,6 +1,7 @@
 cat > .gitignore << 'EOF'
 # Entornos y caches
 venv/
+.nexbooking/
 .env
 __pycache__/
 *.pyc
