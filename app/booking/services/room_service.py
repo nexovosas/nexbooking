@@ -1,15 +1,13 @@
-# app/booking/services/room_service.py
 from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from app.booking.models.room_model import Room
 from app.booking.schemas.room_schema import RoomCreate, RoomUpdate
-from app.booking.services.image_service import create_image_for_rooms_from_upload
 from app.booking.services.s3_service import S3Service
 
 
