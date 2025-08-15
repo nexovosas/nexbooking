@@ -202,9 +202,7 @@ def read_one_accommodation(
                                 "type": "string",
                                 "description": "JSON string de AccommodationUpdate",
                                 "example": (
-                                    "{\"name\":\"La Montera 5\",\"description\":\"Updated description\","
-                                    "\"services\":\"glamping,spa\",\"is_active\":false,\"type\":\"Glamping\","
-                                    "\"pet_friendly\":true,\"location\":\"Updated Location\"}"
+                                    "{\"name\":\"La Montera 5\",\"description\":\"Updated description\",\"services\":\"glamping,spa\",\"is_active\":false,\"type\":\"Glamping\",\"pet_friendly\":true,\"location\":\"Updated Location\",\"phone_number\":\"+57 300 123 4567\",\"email\":\"contact@lamonterahotel.com\",\"addres\":\"Calle 123 #45-67, San Vicente Ferrer, Antioquia\",\"stars\":4}"
                                 ),
                             },
                             "new_images": {  # <-- multiple files
