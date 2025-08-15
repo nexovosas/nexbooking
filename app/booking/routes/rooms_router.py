@@ -128,7 +128,9 @@ def read_rooms_by_accommodation(
     accommodation_id: int = Path(..., gt=0, description="Accommodation ID"),
     db: Session = Depends(get_db)
 ):
-    return get_rooms_by_accommodation_id(db, accommodation_id)
+    rooms = get_rooms_by_accommodation_id(db, accommodation_id)
+    _attach_presigned_urls(rooms)
+    return rooms
 
 
 @router.put(
