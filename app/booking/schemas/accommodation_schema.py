@@ -35,21 +35,30 @@ class AccommodationCreate(BaseModel):
                 "location": "San Vicente Ferrer, Antioquia",
                 "description": "5-star hilltop hotel with 360° views, glamping area, spa, and helipad.",
                 "services": "glamping,spa,helicopter-pad,paragliding",
+                "phone_number": "+57 300 123 4567",
+                "email": "contact@lamonterahotel.com",
+                "addres": "Calle 123 #45-67, San Vicente Ferrer, Antioquia",
+                "stars": 5,
                 "pet_friendly": True,
                 "type": "Hotel",
-                "is_active": True,
-                
+                "is_active": True
             }
         ]
     })
-    name: Annotated[str, Field(min_length=2, max_length=150, examples=["La Montera Hotel"])]
-    location: Annotated[str, Field(min_length=2, max_length=150, examples=["San Vicente Ferrer, Antioquia"])]
-    description: Annotated[Optional[str], Field(None, max_length=500, examples=["5-star hilltop hotel with 360° views."])]
-    services: Annotated[Optional[str], Field(None, max_length=300, examples=["glamping,spa,helicopter-pad"])]
-    pet_friendly: Annotated[bool, Field(default=False, examples=[True])]
-    type: Annotated[str, Field(min_length=2, max_length=50, examples=["Hotel"])]
-    is_active: Annotated[bool, Field(default=True, examples=[True])]
-    
+    name: Annotated[str, Field(min_length=2, max_length=150)]
+    location: Annotated[str, Field(min_length=2, max_length=150)]
+    description: Annotated[Optional[str], Field(None, max_length=500)]
+    services: Annotated[Optional[str], Field(None, max_length=300)]
+    phone_number: Annotated[str, Field(
+        max_length=255, examples=["+57 300 123 4567"])]
+    email: Annotated[str, Field(max_length=255, examples=[
+                                "contact@lamonterahotel.com"])]
+    addres: Annotated[str, Field(max_length=255, examples=[
+                                 "Calle 123 #45-67, Ciudad"])]
+    stars: Annotated[int, Field(ge=0, le=5, examples=[4])]
+    pet_friendly: Annotated[bool, Field(default=False)]
+    type: Annotated[str, Field(min_length=2, max_length=50)]
+    is_active: Annotated[bool, Field(default=True)]
 
 
 # ---------- Accommodation Update ----------
@@ -60,17 +69,26 @@ class AccommodationUpdate(BaseModel):
                 "name": "La Montera Glamping",
                 "description": "Updated description for the glamping site",
                 "services": "glamping,spa",
+                "phone_number": "+57 311 987 6543",
+                "email": "reservas@lamonterahotel.com",
+                "addres": "Nueva dirección, Ciudad",
+                "stars": 4,
                 "is_active": False,
                 "type": "Glamping",
                 "pet_friendly": True,
-                "location": "Updated Location",
+                "location": "Updated Location"
             }
         ]
     })
     name: Annotated[Optional[str], Field(None, min_length=2, max_length=150)]
-    location: Annotated[Optional[str], Field(None, min_length=2, max_length=150)]
+    location: Annotated[Optional[str], Field(
+        None, min_length=2, max_length=150)]
     description: Annotated[Optional[str], Field(None, max_length=500)]
     services: Annotated[Optional[str], Field(None, max_length=300)]
+    phone_number: Annotated[Optional[str], Field(None, max_length=255)]
+    email: Annotated[Optional[str], Field(None, max_length=255)]
+    addres: Annotated[Optional[str], Field(None, max_length=255)]
+    stars: Annotated[Optional[int], Field(None, ge=0, le=5)]
     pet_friendly: Optional[bool] = None
     type: Annotated[Optional[str], Field(None, min_length=2, max_length=50)]
     is_active: Optional[bool] = None
@@ -83,6 +101,10 @@ class AccommodationOut(BaseModel):
     location: str
     description: Optional[str]
     services: Optional[str]
+    phone_number: str
+    email: str
+    addres: str
+    stars: int
     pet_friendly: bool
     type: str
     host_id: int
@@ -100,6 +122,10 @@ class AccommodationOut(BaseModel):
                     "location": "San Vicente Ferrer, Antioquia",
                     "description": "5-star hilltop hotel with 360° views, glamping, spa, and helipad.",
                     "services": "glamping,spa,helicopter-pad,paragliding",
+                    "phone_number": "+57 300 123 4567",
+                    "email": "contact@lamonterahotel.com",
+                    "addres": "Calle 123 #45-67, San Vicente Ferrer, Antioquia",
+                    "stars": 5,
                     "pet_friendly": True,
                     "type": "Hotel",
                     "host_id": 1,

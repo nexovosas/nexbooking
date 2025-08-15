@@ -11,6 +11,10 @@ class Accommodation(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
     location: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(Text())
+    phone_number: Mapped[str | None] = mapped_column(String(255), nullable=False, server_default="")
+    email: Mapped[str | None] = mapped_column(String(255), nullable=False, server_default="")
+    addres: Mapped[str | None] = mapped_column(String(255), nullable=False, server_default="")
+    stars: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     services: Mapped[str | None] = mapped_column(String(255))
 
     host_id: Mapped[int] = mapped_column(
