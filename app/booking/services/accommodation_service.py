@@ -4,13 +4,12 @@ from typing import Optional
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import text
-from fastapi import Depends, HTTPException, status
+from fastapi import HTTPException, status
 
 from app.booking.models.accommodation_model import Accommodation
 from app.booking.models.room_model import Room
 from app.booking.schemas.accommodation_schema import AccommodationCreate, AccommodationUpdate
 from app.booking.services.s3_service import S3Service
-from app.db.session import get_db
 
 def _host_exists(db: Session, host_id: int) -> bool:
     # Chequeo directo contra la tabla "user" de Django

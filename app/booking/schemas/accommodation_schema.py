@@ -85,10 +85,13 @@ class AccommodationUpdate(BaseModel):
         None, min_length=2, max_length=150)]
     description: Annotated[Optional[str], Field(None, max_length=500)]
     services: Annotated[Optional[str], Field(None, max_length=300)]
-    phone_number: Annotated[Optional[str], Field(None, max_length=255)]
-    email: Annotated[Optional[str], Field(None, max_length=255)]
-    addres: Annotated[Optional[str], Field(None, max_length=255)]
-    stars: Annotated[Optional[int], Field(None, ge=0, le=5)]
+    phone_number: Annotated[str, Field(
+        max_length=255, examples=["+57 300 123 4567"])]
+    email: Annotated[str, Field(max_length=255, examples=[
+                                "contact@lamonterahotel.com"])]
+    addres: Annotated[str, Field(max_length=255, examples=[
+                                 "Calle 123 #45-67, Ciudad"])]
+    stars: Annotated[int, Field(ge=0, le=5, examples=[4])]
     pet_friendly: Optional[bool] = None
     type: Annotated[Optional[str], Field(None, min_length=2, max_length=50)]
     is_active: Optional[bool] = None

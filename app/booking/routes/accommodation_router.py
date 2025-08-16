@@ -268,11 +268,6 @@ async def update_accommodation_endpoint(
         updates = AccommodationUpdate.model_validate(payload)
         acc = update_accommodation(db, accommodation_id, updates)
 
-    # 2) Normalizaciones
-    #files_to_add: List[UploadFile] = []
-    #if new_images:
-    #   files_to_add.extend([f for f in new_images if isinstance(f, UploadFile) and getattr(f, "filename", "")])
-
     ids_to_delete = _parse_delete_ids(delete_image_ids)
     keys_to_add = list(dict.fromkeys(_to_str_list(new_image_keys)))  # dedupe
 
