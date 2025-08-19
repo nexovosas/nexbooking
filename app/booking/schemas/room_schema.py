@@ -29,6 +29,7 @@ class RoomCreate(BaseModel):
     model_config = ConfigDict(json_schema_extra={
         "examples": [
             {
+                "room_name": "H-001",
                 "room_type": "Suite Deluxe",
                 "capacity": 2,
                 "amenities": "WiFi,Jacuzzi,Breakfast included",
@@ -44,6 +45,7 @@ class RoomCreate(BaseModel):
             }
         ]
     })
+    room_name: Annotated[str, Field(min_length=5, max_length=50, examples=["H-001"])]
     room_type: Annotated[str, Field(min_length=2, max_length=100, examples=["Suite Deluxe"])]
     capacity: Annotated[int, Field(gt=0, le=50, description="Number of people the room can host", examples=[2])]
     amenities: Annotated[Optional[str], Field(None, max_length=500, examples=["WiFi,Jacuzzi,Breakfast included"])]
@@ -83,6 +85,7 @@ class RoomUpdate(BaseModel):
 # ---------- Room Out ----------
 class RoomOut(BaseModel):
     id: int
+    room_name: str
     room_type: str
     capacity: int
     amenities: Optional[str] = None
@@ -98,6 +101,7 @@ class RoomOut(BaseModel):
             "examples": [
                 {
                     "id": 10,
+                    "room_name": "H-001",
                     "room_type": "Suite Deluxe",
                     "capacity": 2,
                     "amenities": "WiFi,Jacuzzi,Breakfast included",

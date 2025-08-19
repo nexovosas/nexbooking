@@ -9,6 +9,7 @@ class Room(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
+    room_name: Mapped[str] = mapped_column(String(50), nullable=False, default="-", server_default="-", doc="Nombre de la Habitacion por ejemplo: H-001")
     room_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True, doc="Tipo de habitación (ej. individual, doble, suite)")
     capacity: Mapped[int] = mapped_column(Integer, nullable=False, doc="Capacidad máxima de personas")
     amenities: Mapped[str | None] = mapped_column(String(255), doc="Servicios incluidos, separados por comas o como JSON")
