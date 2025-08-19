@@ -41,6 +41,7 @@ from app.booking.services.accommodation_service import (
     get_accommodations_by_host,
     search_accommodations_service,
     get_accommodation,
+    change_accommodations_status
 )
 from app.booking.services.image_service import (
     create_image_for_accommodation_from_upload,
@@ -132,7 +133,7 @@ def presign_accommodation_images(
 
 # ------- LIST / MY / SEARCH / GET -------
 @router.get("/", response_model=List[AccommodationOut], operation_id="listAccommodations")
-def read_all_accommodations(db: Session = Depends(get_db)):
+def read_all_accommodations(db: Session = Depends(get_db), _: dict = Depends(verify_token)):
     accs = get_all_accommodations(db)
     _attach_presigned_urls(accs)
     return accs
@@ -155,6 +156,7 @@ def search_accommodations(
     max_price: Optional[float] = None,
     services: Optional[str] = None,
     db: Session = Depends(get_db),
+    _: dict = Depends(verify_token)
 ):
     accs = search_accommodations_service(db, name, location, max_price, services)
     _attach_presigned_urls(accs)
@@ -171,6 +173,7 @@ def search_accommodations(
 def read_one_accommodation(
     accommodation_id: int = Path(..., gt=0, description="Accommodation ID"),
     db: Session = Depends(get_db),
+    _: dict = Depends(verify_token)
 ):
     acc = get_accommodation(db, accommodation_id)
     _attach_presigned_urls(acc)
@@ -296,6 +299,38 @@ async def update_accommodation_endpoint(
     _attach_presigned_urls(acc)
     return acc
 
+
+# ------- CHANGE STATUS -------
+@router.patch(
+    "/{accommodation_id}/status",
+    response_model=AccommodationOut,
+    summary="Change accommodation status",
+    description="Permite al host activar o desactivar un alojamiento",
+    operation_id="changeAccommodationStatus",
+    responses={
+        200: {"description": "OK"},
+        400: {"model": ErrorResponse, "description": "Bad request"},
+        403: {"model": ErrorResponse, "description": "Forbidden (not owner)"},
+        404: {"model": ErrorResponse, "description": "Not found"},
+    },
+)
+def change_status_accommodation_endpoint(
+    accommodation_id: int = Path(..., gt=0, description="Accommodation ID"),
+    is_active: bool = Form(
+        ..., description="Nuevo estado del alojamiento (true=activo, false=inactivo)"),
+    db: Session = Depends(get_db),
+    user: dict = Depends(verify_token),
+):
+    acc = get_accommodation(db, accommodation_id)
+
+    # Solo el dueño puede cambiar el estado
+    if acc.host_id != user.get("id"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+
+    acc = change_accommodations_status(db, accommodation_id, is_active)
+    _attach_presigned_urls(acc)
+    return acc
 
 
 # ------- DELETE -------

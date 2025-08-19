@@ -142,5 +142,12 @@ def delete_accommodation(db: Session, accommodation_id: int):
     db.commit()
     return acc
 
+def change_accommodations_status(db: Session, accommodation_id: int, is_active: bool):
+    acc = get_accommodation(db, accommodation_id)
+    acc.is_active = is_active
+    db.commit()
+    db.refresh(acc)
+    return acc
+
 def get_accommodations_by_host(db: Session, host_id: int):
     return db.query(Accommodation).filter(Accommodation.host_id == host_id).all()
