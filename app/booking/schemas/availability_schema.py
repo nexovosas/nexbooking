@@ -51,9 +51,6 @@ class AvailabilityUpdate(BaseModel):
     model_config = ConfigDict(json_schema_extra={
         "examples": [
             {
-                "price": 380000.00
-            },
-            {
                 "date": "2025-08-20",
                 "price": 360000.00
             }

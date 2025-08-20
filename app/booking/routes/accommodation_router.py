@@ -3,7 +3,7 @@ from __future__ import annotations
 # Stdlib
 import json
 from json import JSONDecodeError
-from typing import List, Optional, Union, Iterable
+from typing import List, Optional, Union
 
 # FastAPI / SQLAlchemy
 from fastapi import (

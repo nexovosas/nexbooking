@@ -1,10 +1,13 @@
 # app/booking/services/image_service.py
 from typing import Optional, List
 import mimetypes
+import uuid
+from io import BytesIO
 
 from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.orm import Session
 from botocore.exceptions import ClientError
+from PIL import Image as PILImage
 
 from app.booking.models.image_model import Image
 from .s3_service import S3Service
@@ -12,6 +15,7 @@ from .s3_service import S3Service
 # Reglas técnicas centralizadas
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
+
 
 def _normalize_mime(file: UploadFile) -> str:
     """
@@ -31,6 +35,7 @@ def _normalize_mime(file: UploadFile) -> str:
         guessed = "image/jpeg"
 
     return guessed or ct or "application/octet-stream"
+
 
 def _enforce_file_rules(file: UploadFile):
     # 1) Tipo MIME (normalizado/fallback por extensión)
@@ -58,6 +63,42 @@ def _enforce_file_rules(file: UploadFile):
                 )
     finally:
         file.file.seek(pos)
+
+
+def _process_image_to_webp(file: UploadFile, max_size=(1080, 1080)) -> UploadFile:
+    """
+    Procesa una imagen y la convierte a formato WebP optimizado
+    antes de subirla a S3. Retorna un nuevo UploadFile compatible.
+    """
+    try:
+        img = PILImage.open(file.file)
+
+        # Transparencia y paleta
+        if img.mode == "P":
+            img = img.convert("RGBA")
+
+        # Redimensionar manteniendo proporciones
+        img.thumbnail(max_size, PILImage.Resampling.LANCZOS)
+
+        # Guardar en buffer como WebP
+        buffer = BytesIO()
+        img.save(buffer, format="WEBP", quality=75, optimize=True)
+        buffer.seek(0)
+
+        # Generar un nuevo UploadFile-like con extensión .webp
+        random_name = str(uuid.uuid4())[:16] + ".webp"
+        optimized_file = UploadFile(
+            filename=random_name,
+            file=buffer,
+            content_type="image/webp",
+        )
+        return optimized_file
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Image processing failed: {str(e)}"
+        )
+
 
 def create_image_for_accommodation_from_upload(
     file: UploadFile,
@@ -89,6 +130,7 @@ def create_image_for_accommodation_from_upload(
     db.refresh(db_image)
     return db_image
 
+
 def create_image_for_rooms_from_upload(
     file: UploadFile,
     rooms_id: int,
@@ -102,7 +144,8 @@ def create_image_for_rooms_from_upload(
     try:
         obj = s3.upload_file(file, folder=folder)
     except ClientError as e:
-        raise HTTPException(status_code=502, detail=f"S3 upload failed: {e.response.get('Error', {}).get('Message', 'unknown')}")
+        raise HTTPException(
+            status_code=502, detail=f"S3 upload failed: {e.response.get('Error', {}).get('Message', 'unknown')}")
 
     db_image = Image(
         url=obj["key"],
@@ -113,6 +156,7 @@ def create_image_for_rooms_from_upload(
     db.commit()
     db.refresh(db_image)
     return db_image
+
 
 def create_images_for_accommodation_from_keys(
     db: Session,
@@ -134,7 +178,8 @@ def create_images_for_accommodation_from_keys(
     for idx, key in enumerate(norm):
         db_image = Image(
             url=key,
-            alt_text=(alt_texts[idx] if alt_texts and idx < len(alt_texts) else None),
+            alt_text=(alt_texts[idx] if alt_texts and idx <
+                      len(alt_texts) else None),
             accommodation_id=accommodation_id,
             room_id=room_id,
         )
@@ -143,6 +188,7 @@ def create_images_for_accommodation_from_keys(
 
     db.commit()
     return created
+
 
 def delete_images_by_ids(db: Session, image_ids: List[int], accommodation_id: int, room_id: int) -> int:
     if not image_ids:
@@ -164,7 +210,8 @@ def delete_images_by_ids(db: Session, image_ids: List[int], accommodation_id: in
         s3.delete_objects(s3_keys)
     except ClientError as e:
         msg = e.response.get("Error", {}).get("Message", "unknown")
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"S3 delete_objects failed: {msg}")
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
+                            detail=f"S3 delete_objects failed: {msg}")
 
     for img in imgs:
         db.delete(img)
