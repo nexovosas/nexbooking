@@ -73,6 +73,7 @@ class RoomUpdate(BaseModel):
             }
         ]
     })
+    room_name: Annotated[Optional[str], Field(None, min_length=5, max_length=50)]
     room_type: Annotated[Optional[str], Field(None, min_length=2, max_length=100)]
     capacity: Annotated[Optional[int], Field(None, gt=0, le=50)]
     amenities: Annotated[Optional[str], Field(None, max_length=500)]
