@@ -72,6 +72,7 @@ class AvailabilityOut(AvailabilityBase):
                     "id": 1,
                     "date": "2025-08-15",
                     "price": 350000.00,
+                    "status": "available",
                     "room_id": 101
                 }
             ]

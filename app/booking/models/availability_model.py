@@ -1,8 +1,14 @@
 # app/booking/models/availability.py
-from datetime import date
-from sqlalchemy import Integer, Date, Float, ForeignKey, UniqueConstraint, CheckConstraint, Index
+from sqlalchemy import Integer, Date, Float, ForeignKey, UniqueConstraint, CheckConstraint, Index, Enum, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
+import enum
+
+
+class AvailabilityStatus(enum.Enum):
+    available = "Available"
+    busy = "Busy"
+    not_available = "Not Available"
 
 
 class Availability(Base):
@@ -12,6 +18,12 @@ class Availability(Base):
 
     date: Mapped[Date] = mapped_column(Date, nullable=False, index=True, doc="Fecha específica de disponibilidad")
     price: Mapped[float] = mapped_column(Float, nullable=False, doc="Precio para esa fecha")
+    status: Mapped[AvailabilityStatus] = mapped_column(
+        Enum(AvailabilityStatus, name="availabilitystatus"),
+        nullable=False,
+        server_default=text("'Available'")   # válido en Postgres
+    )
+    
 
     room_id: Mapped[int] = mapped_column(
         ForeignKey("rooms.id", ondelete="CASCADE"),

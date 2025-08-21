@@ -81,7 +81,7 @@ async def create_booking(db: Session, booking_data: BookingCreate, user_email: s
     and send a confirmation email.
     """
     try:
-        booking_dict = booking_data.dict()
+        booking_dict = booking_data.model_dump()
         room = db.query(Room).filter(Room.id == booking_data.room_id).first()
         if not room:
             raise ValueError("Room not found")

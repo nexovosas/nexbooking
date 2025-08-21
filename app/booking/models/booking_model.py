@@ -35,6 +35,8 @@ class Booking(Base):
 
     start_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     end_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    start_hour: Mapped[str] = mapped_column(String(20), nullable=False, server_default="")
+    end_hour: Mapped[str] = mapped_column(String(20), nullable=False, server_default="")
 
     guests: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[BookingStatus] = mapped_column(
