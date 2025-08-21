@@ -2,9 +2,15 @@
 from __future__ import annotations
 from datetime import date
 from typing import Optional
-
+from enum import Enum
 from pydantic import BaseModel, Field, ConfigDict
 from typing_extensions import Annotated
+
+
+class AvailabilityStatus(str, Enum):
+    available = "available"
+    busy = "busy"
+    not_available = "not_available"
 
 # ---------- Base ----------
 class AvailabilityBase(BaseModel):
@@ -63,6 +69,7 @@ class AvailabilityUpdate(BaseModel):
 # ---------- Output ----------
 class AvailabilityOut(AvailabilityBase):
     id: int
+    status: AvailabilityStatus
 
     model_config = ConfigDict(
         from_attributes=True,

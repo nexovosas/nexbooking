@@ -6,9 +6,9 @@ import enum
 
 
 class AvailabilityStatus(enum.Enum):
-    available = "Available"
-    busy = "Busy"
-    not_available = "Not Available"
+    available = "available"
+    busy = "busy"
+    not_available = "not_available"
 
 
 class Availability(Base):
@@ -21,7 +21,7 @@ class Availability(Base):
     status: Mapped[AvailabilityStatus] = mapped_column(
         Enum(AvailabilityStatus, name="availabilitystatus"),
         nullable=False,
-        server_default=text("'Available'")   # válido en Postgres
+        server_default=text("'available'")
     )
     
 
