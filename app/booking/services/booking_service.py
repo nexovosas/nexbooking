@@ -147,8 +147,26 @@ async def create_booking(db: Session, booking_data: BookingCreate, user_email: s
 
 
 def get_all_bookings(db: Session) -> List[Booking]:
-    """Return all bookings."""
-    return db.query(Booking).all()
+    bookings = db.query(Booking).all()
+    result = []
+    for b in bookings:
+        result.append({
+            "id": b.id,
+            "code": b.code,
+            "start_date": b.start_date,
+            "end_date": b.end_date,
+            "start_hour": b.start_hour,
+            "end_hour": b.end_hour,
+            "guests": b.guests,
+            "status": b.status.value if hasattr(b.status, "value") else b.status,
+            "total_price": b.total_price,
+            "user_id": b.user_id,
+            "room_id": b.room_id,
+            "user_name": b.user.username if b.user else None,
+            "room_name": b.room.room_name if b.room else None,
+            "accommodation_id": b.room.accommodation_id if b.room else None
+        })
+    return result
 
 
 def get_booking_by_id(db: Session, booking_id: int) -> Optional[Booking]:

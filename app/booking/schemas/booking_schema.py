@@ -94,7 +94,8 @@ class BookingUpdate(BaseModel):
             }
         ]
     })
-    room_id: Annotated[Optional[int], Field(None, description="New Room", examples=["101"])]
+    room_id: Annotated[Optional[int], Field(
+        None, description="New Room", examples=["101"])]
     start_date: Annotated[Optional[date], Field(
         None, description="New check-in date", examples=["2025-08-16"])]
     end_date: Annotated[Optional[date], Field(
@@ -121,10 +122,35 @@ class BookingUpdate(BaseModel):
 class BookingOut(BookingBase):
     id: int
     status: BookingStatus
-    code: Annotated[str, Field(min_length=4, max_length=50,
-                               description="Unique booking code", examples=["BK-2025-0001"])]
-    total_price: Annotated[float, Field(
-        ge=0, description="Total amount for the booking", examples=[1750000.00])]
+    code: Annotated[
+        str,
+        Field(
+            min_length=4,
+            max_length=50,
+            description="Unique booking code",
+            examples=["BK-2025-0001"]
+        )
+    ]
+    total_price: Annotated[
+        float,
+        Field(
+            ge=0,
+            description="Total amount for the booking",
+            examples=[1750000.00]
+        )
+    ]
+    user_name: Annotated[
+        Optional[str],
+        Field(description="Full name of the user", examples=["Juan Pérez"])
+    ] = None
+    room_name: Annotated[
+        Optional[str],
+        Field(description="Name of the room", examples=["Suite Premium"])
+    ] = None
+    accommodation_id: Annotated[
+        Optional[int],
+        Field(description="ID of the accommodation", examples=[12])
+    ] = None
 
     model_config = ConfigDict(
         from_attributes=True,
@@ -139,7 +165,10 @@ class BookingOut(BookingBase):
                     "guests": 2,
                     "status": "confirmed",
                     "code": "BK-2025-0001",
-                    "total_price": 1750000.00
+                    "total_price": 1750000.00,
+                    "user_name": "Juan Pérez",
+                    "room_name": "Suite Premium",
+                    "accommodation_id": 12
                 }
             ]
         }
