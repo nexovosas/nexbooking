@@ -76,15 +76,9 @@ def list_bookings(db: Session = Depends(get_db)) -> List[BookingOut]:
 async def create_new_booking(
     booking: BookingCreate,
     db: Session = Depends(get_db),
-    user_data: dict = Depends(verify_token),
+    _: dict = Depends(verify_token),
 ) -> BookingOut:
-    email = user_data.get("email")
-    if not email:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Email not found in token",
-        )
-    return await create_booking(db, booking, user_email=email)
+    return await create_booking(db, booking, user_email=booking.email)
 
 
 @router.put(

@@ -8,6 +8,8 @@ from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing_extensions import Annotated
 
 # ---------- Earnings Report ----------
+
+
 class EarningsReport(BaseModel):
     total_earnings: Annotated[
         float,
@@ -29,11 +31,20 @@ class BookingStatus(str, Enum):
 
 # ---------- Base Schema ----------
 class BookingBase(BaseModel):
-    user_id: Annotated[int, Field(gt=0, description="User ID making the booking", examples=[5])]
-    room_id: Annotated[int, Field(gt=0, description="Booked room ID", examples=[101])]
-    start_date: Annotated[date, Field(description="Check-in date", examples=["2025-08-15"])]
-    end_date: Annotated[date, Field(description="Check-out date", examples=["2025-08-20"])]
-    guests: Annotated[int, Field(ge=1, le=50, description="Number of guests (1 to 50)", examples=[2])]
+    user_id: Annotated[int, Field(
+        gt=0, description="User ID making the booking", examples=[5])]
+    room_id: Annotated[int, Field(
+        gt=0, description="Booked room ID", examples=[101])]
+    start_date: Annotated[date, Field(
+        description="Check-in date", examples=["2025-08-15"])]
+    end_date: Annotated[date, Field(
+        description="Check-out date", examples=["2025-08-20"])]
+    start_hour: Annotated[str, Field(
+        description="Check-in Hour", examples=["10:10"])]
+    end_hour: Annotated[str, Field(
+        description="Check-out Hour", examples=["14:00"])]
+    guests: Annotated[int, Field(
+        ge=1, le=50, description="Number of guests (1 to 50)", examples=[2])]
 
 
 # ---------- Booking Create ----------
@@ -45,10 +56,16 @@ class BookingCreate(BookingBase):
                 "room_id": 101,
                 "start_date": "2025-08-15",
                 "end_date": "2025-08-20",
+                "start_hour": "10:00",
+                "email": "correo@correo.com",
+                "end_hour": "14:00",
                 "guests": 2
             }
         ]
     })
+
+    email: Annotated[str, Field(
+        None, description="Email for send message booking", examples=["correo@correo.com"])]
 
     @model_validator(mode="after")
     def validate_dates(self) -> "BookingCreate":
@@ -63,8 +80,12 @@ class BookingUpdate(BaseModel):
     model_config = ConfigDict(json_schema_extra={
         "examples": [
             {
+                "room_id": 101,
                 "start_date": "2025-08-16",
                 "end_date": "2025-08-22",
+                "start_hour": "10:00",
+                "end_hour": "14:00",
+                "email": "correo@correo.com",
                 "guests": 3,
                 "status": "confirmed"
             },
@@ -73,10 +94,20 @@ class BookingUpdate(BaseModel):
             }
         ]
     })
-    start_date: Annotated[Optional[date], Field(None, description="New check-in date", examples=["2025-08-16"])]
-    end_date: Annotated[Optional[date], Field(None, description="New check-out date", examples=["2025-08-22"])]
+    room_id: Annotated[Optional[int], Field(None, description="New Room", examples=["101"])]
+    start_date: Annotated[Optional[date], Field(
+        None, description="New check-in date", examples=["2025-08-16"])]
+    end_date: Annotated[Optional[date], Field(
+        None, description="New check-out date", examples=["2025-08-22"])]
+    start_hour: Annotated[Optional[str], Field(
+        None, description="New check-in hour", examples=["10:00"])]
+    end_hour: Annotated[Optional[str], Field(
+        None, description="New check-out hour", examples=["14:00"])]
     guests: Annotated[Optional[int], Field(None, ge=1, le=50, examples=[3])]
-    status: Optional[BookingStatus] = Field(default=None, examples=["confirmed"])
+    email: Annotated[Optional[str], Field(
+        None, description="Email for send message booking", examples=["correo@correo.com"])]
+    status: Optional[BookingStatus] = Field(
+        default=None, examples=["confirmed"])
 
     @model_validator(mode="after")
     def validate_dates(self) -> "BookingUpdate":
@@ -90,8 +121,10 @@ class BookingUpdate(BaseModel):
 class BookingOut(BookingBase):
     id: int
     status: BookingStatus
-    code: Annotated[str, Field(min_length=4, max_length=50, description="Unique booking code", examples=["BK-2025-0001"])]
-    total_price: Annotated[float, Field(ge=0, description="Total amount for the booking", examples=[1750000.00])]
+    code: Annotated[str, Field(min_length=4, max_length=50,
+                               description="Unique booking code", examples=["BK-2025-0001"])]
+    total_price: Annotated[float, Field(
+        ge=0, description="Total amount for the booking", examples=[1750000.00])]
 
     model_config = ConfigDict(
         from_attributes=True,
