@@ -14,8 +14,10 @@ from app.common.schemas import ErrorResponse  # ⬅️ nuevo
 from app.booking.schemas.booking_schema import (
     BookingOut,
     BookingCreate,
+    BookingReport,
     BookingUpdate,
     EarningsReport,
+    IncomeReport,
 )
 from app.booking.services.booking_service import (
     get_income_by_accommodation,
@@ -35,13 +37,14 @@ router = APIRouter(tags=["Bookings"], prefix="/bookings")
 @router.get(
     "/income",
     summary="Obtener ingresos totales por alojamiento",
+    response_model=List[IncomeReport],
     responses={
         200: {"description": "OK"},
         401: {"model": ErrorResponse},
     },
     operation_id="getIncomeByAccommodation",
 )
-def income_report(db: Session = Depends(get_db)) -> dict:
+def income_report(db: Session = Depends(get_db)) -> List[IncomeReport]:
     return get_income_by_accommodation(db)
 
 
@@ -177,6 +180,7 @@ def get_my_earnings_report(
 @router.get(
     "/report",
     summary="Obtener reservas agrupadas por periodo",
+    response_model=List[BookingReport],
     responses={
         200: {"description": "OK"},
         400: {"model": ErrorResponse, "description": "Parámetros inválidos"},

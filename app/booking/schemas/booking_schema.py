@@ -10,6 +10,16 @@ from typing_extensions import Annotated
 # ---------- Earnings Report ----------
 
 
+class BookingReport(BaseModel):
+    period: str
+    booking_count: int
+
+
+class IncomeReport(BaseModel):
+    accommodation_name: str
+    total_income: float
+
+
 class EarningsReport(BaseModel):
     total_earnings: Annotated[
         float,

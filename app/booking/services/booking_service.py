@@ -13,7 +13,7 @@ from app.booking.models.booking_model import Booking, BookingStatus
 from app.booking.models.room_model import Room
 from app.booking.models.accommodation_model import Accommodation
 from app.booking.models.user_model import User
-from app.booking.schemas.booking_schema import BookingCreate, BookingUpdate
+from app.booking.schemas.booking_schema import BookingCreate, BookingReport, BookingUpdate
 from app.utils.email_utils import send_booking_confirmation_email
 
 
@@ -35,14 +35,19 @@ def get_income_by_accommodation(db: Session) -> List[tuple[str, float]]:
         .group_by(Accommodation.id, Accommodation.name)
         .order_by(func.sum(Booking.total_price).desc())
     )
-    return db.execute(stmt).all()
+
+    results = db.execute(stmt).all()
+    return [
+        {"accommodation_name": name, "total_income": float(total_income)}
+        for name, total_income in results
+    ]
 
 
 def get_bookings_grouped_by_period(
     db: Session,
     period: Literal["day", "week", "month"],
     accommodation_id: Optional[int] = None
-) -> List[tuple[date, int]]:
+) -> List[BookingReport]:
     """
     Get bookings grouped by day, week, or month.
     Optionally filter by accommodation_id.
@@ -63,7 +68,12 @@ def get_bookings_grouped_by_period(
     if accommodation_id:
         query = query.filter(Room.accommodation_id == accommodation_id)
 
-    return query.group_by("period").order_by("period").all()
+    results = query.group_by("period").order_by("period").all()
+
+    return [
+        BookingReport(period=str(period), booking_count=booking_count)
+        for period, booking_count in results
+    ]
 
 
 def generate_booking_code(db: Session) -> str:
@@ -118,7 +128,7 @@ async def create_booking(db: Session, booking_data: BookingCreate, user_email: s
                 Availability.date < booking_data.end_date
             ).all()
         )
-        
+
         for avail in availabilities:
             avail.status = AvailabilityStatus.not_available
 
@@ -195,7 +205,7 @@ def update_booking(db: Session, booking_id: int, updated_data: BookingUpdate) ->
             or booking.start_date != old_start
             or booking.end_date != old_end
         ):
-            #Liberar la habitación y disponibilidades anteriores
+            # Liberar la habitación y disponibilidades anteriores
             old_room = db.query(Room).filter(Room.id == old_room_id).first()
             if old_room:
                 old_room.is_available = True
@@ -240,18 +250,29 @@ def update_booking(db: Session, booking_id: int, updated_data: BookingUpdate) ->
 
 
 def delete_booking(db: Session, booking_id: int) -> bool:
-    """Delete a booking by ID."""
+    """Soft delete a booking: set status to 'cancelled' and free up room availability."""
     booking = db.query(Booking).filter(Booking.id == booking_id).first()
     if not booking:
         return False
 
     try:
-        db.delete(booking)
+        # 1. Marcar el booking como cancelado
+        booking.status = BookingStatus.cancelled
+
+        # 2. Liberar disponibilidades de esa habitación en el rango de fechas
+        db.query(Availability).filter(
+            Availability.room_id == booking.room_id,
+            Availability.date >= booking.start_date,
+            Availability.date <= booking.end_date
+        ).update({Availability.status: AvailabilityStatus.available}, synchronize_session=False)
+
         db.commit()
+        db.refresh(booking)
         return True
-    except SQLAlchemyError:
+    except SQLAlchemyError as e:
         db.rollback()
-        raise
+        print(f"Error cancelling booking {booking_id}: {e}")
+        return False
 
 
 def get_bookings_by_host(db: Session, host_id: int) -> List[Booking]:
