@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = Field(default="postgres")
     POSTGRES_PASSWORD: str = Field(default="postgres")
 
+    # Pool SQLAlchemy (bajar si compartes Postgres con otros servicios Nexovo)
+    DB_POOL_SIZE: int = Field(default=2, ge=1, le=50)
+    DB_MAX_OVERFLOW: int = Field(default=0, ge=0, le=50)
+    DB_POOL_TIMEOUT: int = Field(default=10, ge=1)
+    DB_POOL_RECYCLE: int = Field(default=1800, ge=0)
+
     # === Seguridad / JWT ===
     SECRET_KEY: str = Field(..., min_length=32)
     JWT_ALGORITHM: str = Field(default="HS256")
@@ -44,7 +50,7 @@ class Settings(BaseSettings):
     SQLALCHEMY_DATABASE_URI: PostgresDsn | str | None = None
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", ".env.local"),
         env_prefix="",
         case_sensitive=False,
         extra="ignore",
